@@ -1,0 +1,88 @@
+Faz sentido, mas tem armadilhas específicas que você precisa estar consciente antes de rodar. Vou separar "a ideia em si" de "como executá-la sem se enganar".
+
+## A ideia é válida
+
+Filtrar predições por condições (horário, confidence, sessão, regime) é uma técnica real e tem nome: **conditional edge**. A lógica é sólida:
+
+- Modelo com val_acc=48.5% **em média** pode ter val_acc=62% **condicional** a "XAUUSD entre 10:00-11:00 NY + confidence > 0.85".
+- Mercado não é estacionário. Liquidez, news flow, comportamento de participante muda por hora e sessão.
+- Você não precisa que o modelo seja bom sempre — precisa que seja bom **quando você opera**.
+
+Isso é literalmente o que funds quant fazem: rodar um sinal mediano e filtrar pros regimes em que ele funciona.
+
+## Mas tem três armadilhas que matam quase todo mundo
+
+### 1. Multiple testing / data snooping
+
+Se você testar 100 combinações (símbolo × horário × confidence threshold × regime × sessão), **5 vão parecer boas por puro acaso** com p-value 0.05. Pior: se você só mostra as boas no README, enganou a si mesmo antes dos outros.
+
+Exemplo concreto: com 468 amostras, filtrar para "XAU das 10-11h com confidence > 0.85" pode sobrar **12 trades no backtest**. Se 8 forem lucrativos, "66% win rate!" — mas intervalo de confiança 95% vai de ~35% a ~90%. Estatisticamente indistinguível de jogar moeda.
+
+**Mitigação:** reserve um holdout **nunca tocado** (últimos 20% dos dados). Descubra filtros no resto. Só valida no holdout **uma vez**. Se passar, ok. Se não passar, **não volte e ajuste** — é overfit de segunda ordem.
+
+### 2. O filtro precisa ter hipótese causal, não só estatística
+
+"Confidence > 0.85 entre 10h-11h em XAU" precisa de uma história do **por quê**. Ex.:
+- **Boa:** "Entre 10:00-11:00 NY o London fix (10:30 UTC → 06:30 NY) e os ajustes pós-abertura NY criam fluxo direcional previsível em ouro." → testável, falsificável.
+- **Ruim:** "Testei tudo e esse combo deu lucro." → quase certamente overfit.
+
+Se você não consegue escrever a hipótese antes de olhar o resultado, é snooping. Regra prática: **formule a hipótese, rode o teste, documente ambos**. Mesmo que não dê certo.
+
+### 3. Sample size pós-filtro
+
+Quanto mais filtros você empilha, menos trades sobram. Com 468 amostras:
+
+- Sem filtro: 468 trades → estatisticamente significativo.
+- Filtro horário (1h de 24): ~20 trades.
+- Filtro horário + confidence > 0.85 (top ~15%): ~3 trades.
+- Adicionar sessão + regime: você fica com **zero ou um trade por mês**.
+
+Não dá pra distinguir edge de sorte com N=3. Precisa de dados suficientes em cada bucket condicional. **Heurística:** mínimo 30 trades por filtro antes de acreditar em qualquer métrica.
+
+## Como fazer isso direito
+
+**Fase 1 — exploração honesta (com seu code atual)**
+
+1. Gere predições por símbolo ao longo de **o máximo de histórico possível** (não 468 candles — isso não chega pra nada condicional). Puxe 12+ meses de M5 = ~70k candles.
+2. Para cada predição, salve: `symbol, timestamp, hour, session, regime, confidence, predicted_direction, actual_direction, pnl_if_traded`.
+3. Isso vira um parquet de "research dataset". Reusa-se em tudo que vem depois.
+
+**Fase 2 — descoberta de strategy filters**
+
+No dataset acima, rode análises condicionais sistemáticas:
+
+- `win_rate | hour` — por hora do dia.
+- `win_rate | confidence_bucket` — por decil de confidence.
+- `win_rate | session × symbol` — os buckets prováveis.
+
+Os "promising filters" são onde você vê:
+- Win rate claramente acima de 50% (digamos > 55%).
+- Número de amostras suficiente (> 100 no bucket).
+- Explicação plausível do mercado.
+
+**Fase 3 — combinação e validação**
+
+Cada filtro escolhido: testa em **holdout temporal** (últimos 20% dos dados que não foram usados na descoberta). Sem retry. Sem tuning.
+
+**Fase 4 — paper trading**
+
+Mesmo passando tudo, rode **forward** (paper trade ou micro lotes) por 1-2 meses antes de tamanho real. Mercado muda. O que funcionou 2024-2025 pode não funcionar em 2026.
+
+## Infraestrutura que você provavelmente precisa construir
+
+Olhando seu código, você tem as peças (`backtest/engine.py`, `decision/signal.py`, `features/session.py`) — mas não tem ainda um **framework de análise condicional**. Sugiro um arquivo `src/research/conditional_analysis.py` que:
+
+1. Carrega o dataset de predições históricas.
+2. Aceita filtros arbitrários como dict: `{"symbol": "XAUUSD", "hour_range": (14, 15), "confidence_min": 0.85}`.
+3. Retorna: `n_trades, win_rate, mean_pnl, sharpe, worst_drawdown, p_value (vs coin flip), confidence_interval`.
+4. Salva tudo em `data/research/filter_backtest_{timestamp}.parquet` pra você ter histórico de quais filtros testou — contra si mesmo, contra snooping.
+
+Isso é o que transforma "tiro na lua" em "experimentação disciplinada".
+
+## Resposta direta à pergunta
+
+**Não é tiro na lua** — é a abordagem certa. Modelo fraco + estratégia conditional pode virar edge real. Funciona na indústria.
+
+**Mas** com 468 amostras, gap de overfit de 20% e sem framework de análise condicional, você corre risco de descobrir "edges" que não existem fora dos seus dados. Resolve-se com (a) muito mais dados históricos, (b) holdout inviolado, (c) hipóteses escritas antes dos testes, (d) paper trade forward.
+
+Se quiser, posso implementar o esqueleto do `conditional_analysis.py` — não é complexo, e vai te dar uma base pra testar essas hipóteses de forma honesta em vez de ir ajustando filtros no olho.

@@ -1,0 +1,42 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# ---------------------------------------------------------------------------
+# mutmut — mutation testing for critical modules.
+#
+# Why: coverage says "line executed", not "test would catch a regression".
+# Mutmut introduces small code changes (e.g. `>` → `>=`, `+` → `-`) and checks
+# whether the test suite still fails. A "surviving mutant" = test gap.
+#
+# Scope: narrow to the CRITICAL tier (execution + decision + backtest + mt5).
+# Full-project mutation testing is too slow for pre-merge (~hours). Use it
+# as a pre-release / weekly-CI quality gate.
+#
+# Usage:
+#     mutmut run                 # run mutations against paths_to_mutate
+#     mutmut results             # summary
+#     mutmut show <id>           # inspect a surviving mutant
+#     mutmut html                # HTML report
+#
+# Target survival rate: < 15% for CRITICAL modules. A surviving mutant is
+# a concrete test-gap that needs a new targeted test.
+# ---------------------------------------------------------------------------
+[tool.mutmut]
+paths_to_mutate = [
+    "src/decision/signal.py",
+    "src/decision/ensemble.py",
+    "src/execution/engine.py",
+    "src/backtest/engine.py",
+    "src/evaluation/cpcv.py",
+]
+tests_dir = "tests/"
+runner = "python -m pytest -x -q --tb=no --no-header tests/decision tests/execution tests/backtest tests/evaluation tests/property"
+# Exclude lines that shouldn't be mutated (logs, type hints, __repr__)
+also_copy = ["config/", "src/"]
