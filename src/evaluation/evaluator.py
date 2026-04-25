@@ -6,7 +6,6 @@ Compara previsoes com valores reais quando novos candles fecham.
 import logging
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 
 from config.settings import settings

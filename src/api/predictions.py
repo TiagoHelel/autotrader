@@ -6,10 +6,15 @@ GET /symbols, /metrics, /predictions, /models/performance
 import logging
 import math
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, Query
+
+from config.settings import settings
+from src.evaluation.evaluator import get_model_performance, get_performance_over_time, load_metrics
+from src.evaluation.feature_importance import load_feature_importance
+from src.evaluation.overfitting import OVERFIT_THRESHOLD, get_latest_validation
+from src.evaluation.tracker import get_experiments, get_experiment_summary
 
 
 def _finite_or(value, default=0.0):
@@ -21,12 +26,6 @@ def _finite_or(value, default=0.0):
     if not math.isfinite(v):
         return default
     return v
-
-from config.settings import settings
-from src.evaluation.evaluator import get_model_performance, get_performance_over_time, load_metrics
-from src.evaluation.tracker import get_experiments, get_experiment_summary
-from src.evaluation.overfitting import get_latest_validation, OVERFIT_THRESHOLD
-from src.evaluation.feature_importance import load_feature_importance
 
 logger = logging.getLogger(__name__)
 
@@ -500,7 +499,6 @@ def get_system_status():
     """Status do sistema de previsao."""
     raw_dir = settings.raw_dir
     pred_dir = settings.predictions_dir
-    metrics_dir = settings.metrics_dir
 
     n_symbols = len(list(raw_dir.glob("*.parquet"))) if raw_dir.exists() else 0
     n_predictions = 0

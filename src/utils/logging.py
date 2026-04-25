@@ -5,9 +5,7 @@ Salva logs em CSV para analise posterior.
 
 import csv
 import logging
-import os
 from datetime import datetime
-from pathlib import Path
 
 from config.settings import settings
 

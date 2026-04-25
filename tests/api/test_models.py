@@ -1,6 +1,5 @@
 """Testes de endpoints de modelos (performance, best, info)."""
 
-import pytest
 
 
 def test_model_performance(client):

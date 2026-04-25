@@ -8,7 +8,6 @@ Partes 3, 5 e 6 do pipeline de news.
 import logging
 from datetime import datetime, timedelta
 
-import numpy as np
 import pandas as pd
 
 from config.settings import settings

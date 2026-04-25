@@ -46,6 +46,10 @@ Active development - sistema completo com previsao, decisao, backtest, ranking, 
 
 ## Operational Notes
 
+- Agent researcher: `src/agent_researcher/` gera hipoteses via OpenCode,
+  valida com `conditional_analysis` e escreve em runtime apenas em
+  `src/agent_researcher/**` e `vault/AgentResearch/**`.
+- Scheduler: upload 01:00 UTC, daily_eval 02:00 UTC, agent researcher 03:00 UTC.
 - Frontend bot status polling: 10s
 - WebSocket reconnect interval: 10s
 - Tema Matrix agora e um modo terminal dedicado, sem alterar Default/Cyberpunk

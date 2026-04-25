@@ -13,7 +13,6 @@ from src.data.news.investing import (
     fetch_news,
     run_news_ingestion,
     load_news_raw,
-    save_news_raw,
 )
 
 

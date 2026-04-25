@@ -50,8 +50,6 @@ import logging
 import math
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -59,7 +57,7 @@ import pandas as pd
 from config.settings import settings
 from src.backtest.engine import DEFAULT_SPREADS
 from src.features.regime import compute_market_regime
-from src.features.session import SESSIONS, SESSION_WEIGHTS, add_session_features
+from src.features.session import add_session_features
 from src.mt5.symbols import get_pip_value
 
 logger = logging.getLogger(__name__)

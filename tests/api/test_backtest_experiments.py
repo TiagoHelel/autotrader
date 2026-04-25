@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -256,7 +256,7 @@ class TestModelsSelect:
 
     def test_with_regime(self, client):
         with patch("src.decision.model_selector.select_model", return_value={"model": "rf"}) as m:
-            resp = client.get("/api/models/select?symbol=EURUSD&trend=1&volatility_regime=2")
+            client.get("/api/models/select?symbol=EURUSD&trend=1&volatility_regime=2")
         m.assert_called_once_with("EURUSD", {"trend": 1, "volatility_regime": 2})
 
 

@@ -7,8 +7,6 @@ Validar que evaluate_filter detecta a condicao correta como PROMISING
 e rejeita as demais.
 """
 
-import json
-from pathlib import Path
 
 import numpy as np
 import pandas as pd

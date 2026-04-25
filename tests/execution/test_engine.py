@@ -6,8 +6,6 @@ Testa contrato: _sanitize_prediction_array, _save_predictions, run_cycle flow.
 """
 from __future__ import annotations
 
-from datetime import datetime
-from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 import numpy as np
@@ -114,7 +112,15 @@ class TestPredictionEngine:
     @patch("src.execution.engine.run_cpcv")
     @patch("src.execution.engine.save_validation_results")
     @patch("src.execution.engine.overfitting_score")
-    def test_run_cpcv_validation(self, mock_ovf, mock_save, mock_cpcv, fake_project):
+    @patch("src.execution.engine.log_decision")
+    def test_run_cpcv_validation(
+        self,
+        mock_log_decision,
+        mock_ovf,
+        mock_save,
+        mock_cpcv,
+        fake_project,
+    ):
         mock_cpcv.return_value = {
             "mean_accuracy": 0.7,
             "std_accuracy": 0.05,
@@ -128,7 +134,10 @@ class TestPredictionEngine:
         y = np.random.rand(100, 3)
         result = engine._run_cpcv_validation("EURUSD", X, y)
         assert "xgboost" in result
+        assert result["xgboost"]["avg_overfit_gap"] == pytest.approx(0.1)
+        assert result["xgboost"]["overfit_warning"] is False
         mock_save.assert_called_once()
+        mock_log_decision.assert_not_called()
 
     @patch("src.execution.engine.run_cpcv", side_effect=RuntimeError("fail"))
     @patch("src.execution.engine.save_validation_results")
@@ -252,10 +261,18 @@ class TestLoadNewsData:
 class TestSaveFeatureImportance:
     def test_calls_save_for_fitted_tree_models(self, fake_project):
         engine = PredictionEngine(["EURUSD"])
-        m_xgb = MagicMock(name="xgb"); m_xgb.is_fitted = True; m_xgb.name = "xgboost"
-        m_rf = MagicMock(name="rf"); m_rf.is_fitted = True; m_rf.name = "random_forest"
-        m_lin = MagicMock(name="lin"); m_lin.is_fitted = True; m_lin.name = "linear"
-        m_unfit = MagicMock(name="u"); m_unfit.is_fitted = False; m_unfit.name = "xgboost"
+        m_xgb = MagicMock(name="xgb")
+        m_xgb.is_fitted = True
+        m_xgb.name = "xgboost"
+        m_rf = MagicMock(name="rf")
+        m_rf.is_fitted = True
+        m_rf.name = "random_forest"
+        m_lin = MagicMock(name="lin")
+        m_lin.is_fitted = True
+        m_lin.name = "linear"
+        m_unfit = MagicMock(name="u")
+        m_unfit.is_fitted = False
+        m_unfit.name = "xgboost"
         engine.registry = MagicMock()
         engine.registry.get_models.return_value = [m_xgb, m_rf, m_lin, m_unfit]
         df = pd.DataFrame({"a": [1, 2]})
@@ -274,10 +291,18 @@ class TestSaveFeatureImportance:
 class TestRunCpcvValidationOverfitBranch:
     """Cover overfitting_score call inside fold_details loop."""
 
+    @patch("src.execution.engine.log_decision")
     @patch("src.execution.engine.save_validation_results")
     @patch("src.execution.engine.overfitting_score", return_value=0.1)
     @patch("src.execution.engine.run_cpcv")
-    def test_fold_details_triggers_overfit_score(self, mock_cpcv, mock_ovf, mock_save, fake_project):
+    def test_fold_details_triggers_overfit_score(
+        self,
+        mock_cpcv,
+        mock_ovf,
+        mock_save,
+        mock_log_decision,
+        fake_project,
+    ):
         mock_cpcv.return_value = {
             "mean_accuracy": 0.6,
             "std_accuracy": 0.02,
@@ -288,9 +313,59 @@ class TestRunCpcvValidationOverfitBranch:
             ],
         }
         engine = PredictionEngine(["EURUSD"])
-        engine._run_cpcv_validation("EURUSD", np.zeros((30, 5)), np.zeros((30, 3)))
+        result = engine._run_cpcv_validation(
+            "EURUSD",
+            np.zeros((30, 5)),
+            np.zeros((30, 3)),
+        )
         # called for each fold across 3 models
         assert mock_ovf.call_count == 6
+        assert result["xgboost"]["avg_overfit_gap"] == pytest.approx((0.3 + 0.15) / 2)
+        assert result["xgboost"]["overfit_warning"] is True
+        mock_log_decision.assert_any_call(
+            "EURUSD",
+            "overfit_warning_xgboost",
+            "avg_gap=0.2250 > threshold=0.1000",
+        )
+
+    @patch("src.execution.engine.log_decision")
+    @patch("src.execution.engine.save_validation_results")
+    @patch("src.execution.engine.overfitting_score", return_value=0.25)
+    @patch("src.execution.engine.run_cpcv")
+    def test_logs_warning_when_avg_gap_exceeds_threshold(
+        self,
+        mock_cpcv,
+        mock_ovf,
+        mock_save,
+        mock_log_decision,
+        fake_project,
+        caplog,
+    ):
+        mock_cpcv.return_value = {
+            "mean_accuracy": 0.6,
+            "std_accuracy": 0.02,
+            "fold_scores": [0.6],
+            "fold_details": [
+                {"train_score": 0.9, "val_score": 0.6, "overfit_gap": 0.3},
+            ],
+        }
+        engine = PredictionEngine(["EURUSD"])
+
+        with caplog.at_level("WARNING"):
+            result = engine._run_cpcv_validation(
+                "EURUSD",
+                np.zeros((30, 5)),
+                np.zeros((30, 3)),
+            )
+
+        assert result["xgboost"]["avg_overfit_gap"] == pytest.approx(0.3)
+        assert result["xgboost"]["overfit_warning"] is True
+        assert any("overfitting warning" in rec.message for rec in caplog.records)
+        mock_log_decision.assert_any_call(
+            "EURUSD",
+            "overfit_warning_xgboost",
+            "avg_gap=0.3000 > threshold=0.1000",
+        )
 
     @patch("src.execution.engine.save_validation_results", side_effect=RuntimeError("disk full"))
     @patch("src.execution.engine.run_cpcv")
@@ -351,7 +426,9 @@ class TestRunCycle:
         engine.registry.predict_all.return_value = {
             "xgb": np.array([[1.10, 1.11, 1.12]]),
         }
-        m = MagicMock(); m.is_fitted = True; m.name = "xgboost"
+        m = MagicMock()
+        m.is_fitted = True
+        m.name = "xgboost"
         engine.registry.get_models.return_value = [m]
 
         with patch.object(engine, "_load_news_data"), \
@@ -410,7 +487,9 @@ class TestInitialSetup:
         engine = PredictionEngine(["EURUSD"])
         engine.registry = MagicMock()
         engine.registry.train_all.return_value = {}
-        m = MagicMock(); m.is_fitted = True; m.name = "xgboost"
+        m = MagicMock()
+        m.is_fitted = True
+        m.name = "xgboost"
         engine.registry.get_models.return_value = [m]
 
         with patch.object(engine, "_load_news_data"), \

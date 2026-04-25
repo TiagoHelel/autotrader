@@ -33,7 +33,11 @@ from src.models.registry import ModelRegistry
 from src.evaluation.evaluator import evaluate_predictions
 from src.evaluation.tracker import log_experiment
 from src.evaluation.cpcv import run_cpcv
-from src.evaluation.overfitting import overfitting_score, save_validation_results
+from src.evaluation.overfitting import (
+    OVERFIT_THRESHOLD,
+    overfitting_score,
+    save_validation_results,
+)
 from src.evaluation.feature_importance import save_feature_importance
 from src.decision.signal import generate_signals_for_models, generate_ensemble_signal, log_signal
 from src.utils.logging import log_prediction, log_decision, log_session_metrics
@@ -377,7 +381,6 @@ class PredictionEngine:
 
     def _run_cpcv_validation(self, symbol: str, X: np.ndarray, y: np.ndarray) -> dict:
         """Roda CPCV para todos os modelos e salva resultados."""
-        from src.models.registry import create_all_models
         from src.models.xgboost_model import XGBoostPredictor
         from src.models.random_forest import RandomForestPredictor
         from src.models.linear import LinearPredictor
@@ -403,12 +406,25 @@ class PredictionEngine:
                     n_splits=5,
                     embargo_pct=0.02,
                 )
-                all_results[model_name] = cpcv_result
 
                 # Overfitting detection
+                gaps = []
                 for detail in cpcv_result.get("fold_details", []):
-                    gap = detail.get("overfit_gap", 0)
                     overfitting_score(detail["train_score"], detail["val_score"])
+                    gaps.append(float(detail.get("overfit_gap", 0.0)))
+
+                avg_overfit_gap = float(sum(gaps) / len(gaps)) if gaps else 0.0
+                overfit_warning = avg_overfit_gap > OVERFIT_THRESHOLD
+                cpcv_result["avg_overfit_gap"] = avg_overfit_gap
+                cpcv_result["overfit_warning"] = overfit_warning
+                all_results[model_name] = cpcv_result
+
+                if overfit_warning:
+                    message = (
+                        f"avg_gap={avg_overfit_gap:.4f} > threshold={OVERFIT_THRESHOLD:.4f}"
+                    )
+                    logger.warning(f"{symbol} | {model_name}: overfitting warning - {message}")
+                    log_decision(symbol, f"overfit_warning_{model_name}", message)
 
             except Exception as e:
                 logger.warning(f"{symbol} | {model_name}: CPCV failed - {e}")

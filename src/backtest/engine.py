@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from config.settings import settings
-from src.mt5.symbols import get_pip_value, SYMBOL_CONFIG
+from src.mt5.symbols import get_pip_value
 
 logger = logging.getLogger(__name__)
 

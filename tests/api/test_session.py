@@ -1,6 +1,5 @@
 """Testes dos endpoints de session (/api/session/*)."""
 
-import pytest
 
 
 def test_session_current(client):
