@@ -83,7 +83,13 @@
       "Bash(mkdir -p \"C:/Users/Tiago/.claude/skills/python-pep8-style/references\")",
       "Bash(mkdir -p \"C:/Users/Tiago/.claude/skills/python-pep8-style/assets/templates\")",
       "Bash(python -m scripts.package_skill \"C:/Users/Tiago/.claude/skills/python-pep8-style\")",
-      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python -m scripts.package_skill \"C:/Users/Tiago/.claude/skills/python-pep8-style\")"
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python -m scripts.package_skill \"C:/Users/Tiago/.claude/skills/python-pep8-style\")",
+      "Bash(opencode run *)",
+      "Bash(opencode models *)",
+      "Bash(awk '{print $NF}')",
+      "Bash(xargs cat *)",
+      "Bash(env)",
+      "Bash(opencode agent *)"
     ]
   }
 }

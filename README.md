@@ -455,6 +455,83 @@ Validacao formal continua manual via `conditional_analysis.evaluate_filter`
 
 ---
 
+## Agent Researcher Autonomo
+
+`src/agent_researcher/` implementa um agente de pesquisa autonomo que usa
+OpenCode CLI (`opencode run --agent autotrader-researcher --model qwen/qwen/qwen3.5:9b`)
+para gerar hipoteses condicionais, testa com `src.research.conditional_analysis`,
+valida em holdout uma unica vez por filtro e persiste somente estrategias
+validadas.
+
+Contrato de seguranca em runtime:
+
+- O orchestrator Python pode ler o repositorio, `data/research/*.parquet`,
+  `vault/Hypotheses/` e `daily_eval`. Em runtime so escreve em
+  `src/agent_researcher/**` e `vault/AgentResearch/**`.
+- Nao escreve em `data/**`; `evaluate_filter` roda com `log=False` e o agente
+  mantem `state.json` proprio para filtros testados e holdouts usados.
+- O agente OpenCode (`autotrader-researcher`) tem tools allow somente
+  `read`, `list`, `glob`, `grep`, `webfetch`, `websearch`. `write`, `edit`,
+  `patch`, `bash` ficam desligados — o agente pode pesquisar repo + web mas
+  nao consegue editar codigo nem rodar shell mesmo se tentar. Toda escrita
+  passa pelo orchestrator Python.
+- Estrategias ativas ficam em `src/agent_researcher/strategies/active/`;
+  estrategias com drift/dead ficam em `strategies/rejected/`.
+
+### Setup do agente OpenCode
+
+Registrar o agente em `~/.config/opencode/opencode.jsonc` (Linux/macOS) ou
+`%APPDATA%/opencode/opencode.jsonc` (Windows) — bloco `agent.autotrader-researcher`
+com tools/permissions/prompt. Ver decisao [020] em `.project/DECISIONS.md`.
+Verificar com:
+
+```bash
+opencode agent list | grep autotrader-researcher
+```
+
+Configuracao do modelo (LM Studio / Ollama / llama.cpp local em outro host)
+fica no bloco `provider` do mesmo arquivo. Override no nosso codigo via env vars:
+
+- `AGENT_RESEARCH_OPENCODE_CMD` — caminho do binario `opencode`.
+- `AGENT_RESEARCH_OPENCODE_AGENT` — nome do agente OpenCode (default `autotrader-researcher`).
+- `AGENT_RESEARCH_OPENCODE_MODEL` — modelo no formato `provider/model` (default `qwen/qwen/qwen3.5:9b`).
+- `AGENT_RESEARCH_NODE_EXE` / `AGENT_RESEARCH_OPENCODE_SCRIPT` — apenas no
+  Windows, para sobrescrever a deteccao do `node` e do bin do opencode caso
+  o auto-detect nao ache (o cliente pula o shim `.CMD` que mutila argumentos
+  com `/` e `:`).
+
+### Uso
+
+```bash
+python -m src.agent_researcher.orchestrator
+python -m src.agent_researcher.orchestrator --dataset data/research/predictions_xgboost_YYYYMMDD.parquet
+python -m src.agent_researcher.orchestrator --monitor-only
+python -m src.agent_researcher.orchestrator --after-daily-eval
+```
+
+Wrapper agendavel:
+
+```bash
+python scripts/run_agent_researcher.py
+```
+
+O `scripts/scheduler.py` agenda o agente as **03:00 UTC**, depois de
+`upload_to_s3.py` (01:00 UTC) e `daily_eval` (02:00 UTC).
+
+### Debug
+
+Cada chamada salva o prompt enviado em
+`src/agent_researcher/tmp/prompts/hypothesis_<timestamp>.txt`. Em caso de
+falha de subprocess ou parse de JSON, stdout/stderr crus ficam em
+`src/agent_researcher/tmp/prompts/raw_output_<timestamp>.log` para
+diagnostico.
+
+Nao colocar `timeout` na chamada subprocess: o modelo local (qwen 9B em Mac
+mini, por exemplo) pode demorar varios minutos para responder, especialmente
+no primeiro hit do dia.
+
+---
+
 ## Changelog
 
 Historico de mudancas foi movido do README para manter-lo focado na arquitetura.

@@ -6,7 +6,6 @@ Salva importancia de features para XGBoost (gain) e Random Forest.
 import logging
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 
 from config.settings import settings

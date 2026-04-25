@@ -8,7 +8,7 @@ import logging
 import pandas as pd
 
 from config.settings import settings
-from src.research.model_ranking import _load_all_results, get_best_model
+from src.research.model_ranking import get_best_model
 
 logger = logging.getLogger(__name__)
 

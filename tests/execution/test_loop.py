@@ -6,16 +6,17 @@ Testa get_next_candle_time, wait_for_next_candle, _run_news_pipeline.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch, MagicMock
 
 import pandas as pd
 import pytest
 
 from src.execution.loop import (
-    get_next_candle_time,
-    wait_for_next_candle,
     _run_news_pipeline,
+    get_next_candle_time,
+    run_forever,
+    wait_for_next_candle,
 )
 
 
@@ -131,11 +132,6 @@ class TestRunNewsPipeline:
         mock_llm.return_value = pd.DataFrame()  # empty
         _run_news_pipeline()
         mock_save.assert_not_called()
-
-
-# ===================== run_forever =====================
-
-from src.execution.loop import run_forever
 
 
 class TestRunForever:

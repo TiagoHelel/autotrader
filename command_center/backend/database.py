@@ -3,9 +3,8 @@ AutoTrader Command Center - SQLite Mock Database
 Generates realistic FOREX trading data for the dashboard.
 """
 
-import sqlite3
 import random
-import math
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 

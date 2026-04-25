@@ -263,7 +263,6 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
     raw = text[4:end].strip()
     body = text[end + 4:].lstrip("\n")
     meta = {}
-    current_key = None
     current_dict = None
     for line in raw.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -277,7 +276,6 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
             if v == "":
                 current_dict = {}
                 meta[k.strip()] = current_dict
-                current_key = k.strip()
             else:
                 current_dict = None
                 meta[k.strip()] = _coerce(v)

@@ -4,6 +4,7 @@ In-process scheduler para os jobs diarios do AutoTrader.
 Jobs agendados (UTC):
     01:00  upload_to_s3.py        — sobe S3 + arquiva candles localmente
     02:00  run_daily_eval.py      — cruza pred vs real, atualiza vault
+    03:00  run_agent_researcher.py — pesquisa autonoma pos daily_eval
 
 Por que UTC e nao TZ local:
     Mercado FX opera em UTC. Cron diario por TZ local quebra em troca de horario
@@ -11,7 +12,8 @@ Por que UTC e nao TZ local:
 
 Por que 1h de gap entre os jobs:
     Uploader pode demorar (rede, S3 ETag check em N arquivos). Eval depende dos
-    candles arquivados pelo uploader. 1h e folga generosa.
+    candles arquivados pelo uploader. 1h e folga generosa. O agent researcher
+    roda 1h apos o eval para consumir o relatorio/dataset diario ja fechado.
 
 LIMITACAO IMPORTANTE:
     Esta lib (`schedule`) eh IN-PROCESS. Se este script morrer (reboot, crash,
@@ -87,9 +89,21 @@ def job_daily_eval() -> None:
     _run("daily_eval", [str(ROOT / "scripts" / "run_daily_eval.py")])
 
 
+def job_agent_researcher() -> None:
+    _run(
+        "agent_researcher",
+        [str(ROOT / "scripts" / "run_agent_researcher.py")],
+    )
+
+
 JOBS = {
     "upload": (job_upload_s3, "01:00", "Upload S3 + archive local"),
-    "eval":   (job_daily_eval, "02:00", "Daily eval (pred vs real, vault update)"),
+    "eval": (job_daily_eval, "02:00", "Daily eval (pred vs real, vault update)"),
+    "agent": (
+        job_agent_researcher,
+        "03:00",
+        "Agent researcher (LLM hypotheses + holdout-safe validation)",
+    ),
 }
 
 

@@ -10,7 +10,6 @@ import asyncio
 import csv
 import json
 import random
-import sqlite3
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,7 +18,7 @@ from typing import Any
 import httpx
 from fastapi import WebSocket
 
-from database import get_conn, SYMBOLS, BASE_PRICES, PIP_SIZE
+from database import PIP_SIZE, get_conn
 
 # Log files to watch (relative to project data/logs/)
 LOG_FILES = {

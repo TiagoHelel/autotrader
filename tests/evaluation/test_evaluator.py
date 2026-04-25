@@ -53,7 +53,7 @@ class TestEvaluatePredictions:
         preds.to_parquet(settings.predictions_dir / "EURUSD.parquet")
         # raw has candle at same time + 2 future
         raw = _raw(start=pred_time, n=3)  # t, t+1, t+2 only 2 future
-        result = evaluate_predictions("EURUSD", raw)
+        evaluate_predictions("EURUSD", raw)
         # No metrics generated
         assert not (settings.metrics_dir / "EURUSD.parquet").exists()
 

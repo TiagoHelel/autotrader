@@ -37,6 +37,12 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
+# Runtime SQLite (regenerated on backend start via CREATE TABLE IF NOT EXISTS)
+command_center/backend/*.db
+command_center/backend/*.db-journal
+command_center/backend/*.db-wal
+command_center/backend/*.db-shm
+
 # ML / Data
 *.h5
 *.hdf5

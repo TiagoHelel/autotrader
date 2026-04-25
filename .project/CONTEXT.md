@@ -3,7 +3,7 @@
 > **This is the most important file for AI assistants. Keep it current.**
 > Update this at the start or end of every session.
 
-_Last updated: 2026-04-24_
+_Last updated: 2026-04-25 (agent_researcher OpenCode end-to-end)_
 
 ---
 
@@ -16,6 +16,46 @@ equivalente) validar em holdout 30d.
 
 ## What's happening right now
 
+- **Agent researcher autonomo — integracao OpenCode end-to-end (2026-04-25):**
+  - Modulo `src/agent_researcher/` agora roda end-to-end no Windows contra
+    LM Studio + qwen3.5:9b hospedado em Mac mini (192.168.100.191:3032 via
+    OpenAI-compat). Primeira hipotese real gerada e avaliada (verdict
+    REJECTED_N porque dataset ainda nao tem amostras suficientes).
+  - **Agente OpenCode customizado** `autotrader-researcher` registrado em
+    `~/.config/opencode/opencode.jsonc` com tools so de leitura e web
+    (`read`, `list`, `glob`, `grep`, `webfetch`, `websearch`); `write`,
+    `edit`, `patch`, `bash` desligados. Mantemos a capacidade de pesquisar
+    web/vault sem risco do agente editar codigo do projeto.
+  - **Bypass do shim Windows:** `OpenCodeClient` chama `node` direto com
+    `node_modules/opencode-ai/bin/opencode` em vez do `.CMD` shim, porque o
+    shim mutila `--model qwen/qwen/qwen3.5:9b` (chega no yargs como `qwen/`).
+    Prompt entregue via stdin (foge do limite de 8 KB de linha de comando).
+  - **`timeout_seconds` agora `None`** porque qwen 9B no Mac mini pode levar
+    varios minutos por chamada. Sem subprocess timeout.
+  - **Fronteira de escrita preservada:** orchestrator Python continua sendo o
+    unico caminho de escrita no vault/strategies. O agente OpenCode nao recebe
+    nenhum tool de Write/Edit/Bash, entao nao pode burlar mesmo querendo.
+  - Bumps de contexto (vault 20->50 arquivos x 4k->8k chars, daily_eval 5->15,
+    filter_log 50->200, breakdowns extra por symbol/trend/volatility/hour) —
+    prompt atual ~2.6k tokens, espaço sobrando na janela de 100k.
+  - Wrapper agendavel: `scripts/run_agent_researcher.py`. Scheduler:
+    upload 01:00 UTC, daily_eval 02:00 UTC, agent 03:00 UTC.
+  - Suite completa pos-mudancas: **511 passed**.
+- **Lint/PEP 8 cleanup + overfit warning operacional (2026-04-25):**
+  - `pyproject.toml` agora tem **`[tool.ruff]`** com `line-length = 88` e
+    `per-file-ignores` pontual para `command_center/backend/main.py` (`E402`,
+    necessario porque o arquivo injeta `PROJECT_ROOT` no `sys.path` antes dos imports).
+  - Cleanup de lint concluido: imports mortos removidos, `src/api/predictions.py`
+    reorganizado, `tests/execution/test_engine.py` sem `;` inline, `tests/execution/test_loop.py`
+    com imports no topo.
+  - **`src/execution/engine.py` agora transforma overfit gap em sinal operacional:**
+    `_run_cpcv_validation()` calcula `avg_overfit_gap` por modelo a partir de
+    `fold_details`, anexa `overfit_warning` ao resultado da CPCV e registra
+    `log_decision("overfit_warning_<model>")` quando a media passa de `OVERFIT_THRESHOLD`.
+    Nao bloqueia treino nem selecao ainda; apenas observabilidade/telemetria.
+  - Validacao feita: `ruff check .` OK e subset de testes OK
+    (`tests/execution/test_engine.py`, `test_loop.py`, `tests/evaluation/test_overfitting.py`,
+    `test_cpcv.py`) â€” **78 passed**.
 - **Avaliador batch diario implementado (2026-04-24):** `src/evaluation/daily_eval.py`
   cruza pred vs real, segmenta por contexto, detecta drift, auto-executa hipoteses
   com `filters` no frontmatter, gera relatorio em `vault/Research/eval-daily/{date}.md`.

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -31,7 +31,6 @@ from src.llm.news_sentiment import (
     save_llm_features,
     load_llm_features,
     LLMBackend,
-    BACKEND_COOLDOWN_SECONDS,
     shutdown_event,
     LLMShutdown,
 )
@@ -262,7 +261,7 @@ class TestProcessNewsWithLlm:
         ])
         with patch("src.llm.news_sentiment._all_backends_in_cooldown", return_value=True):
             result = process_news_with_llm(df)
-        assert result.iloc[0]["used_fallback"] == True
+        assert result.iloc[0]["used_fallback"]
 
 
 # ===================== save/load_llm_features =====================

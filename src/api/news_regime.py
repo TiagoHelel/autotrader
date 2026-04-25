@@ -9,14 +9,13 @@ from datetime import datetime
 import pandas as pd
 from fastapi import APIRouter, Query
 
-from config.settings import settings
 from src.data.news.investing import load_news_raw, run_news_ingestion
 from src.features.news_features import normalize_news, build_news_features
 from src.features.regime import get_current_regime
 from src.features.session import get_current_session_info, SESSION_WEIGHTS
 from src.features.engineering import load_features
 from src.llm.news_sentiment import load_llm_features, process_news_with_llm, save_llm_features
-from src.mt5.symbols import COUNTRY_CURRENCY_MAP, get_symbol_currencies
+from src.mt5.symbols import get_symbol_currencies
 
 logger = logging.getLogger(__name__)
 

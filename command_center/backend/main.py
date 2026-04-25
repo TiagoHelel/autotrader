@@ -79,7 +79,7 @@ async def _news_refresh_loop():
 def _fetch_and_process_news():
     """Executa pipeline de noticias (sync, roda em thread)."""
     try:
-        from src.data.news.investing import run_news_ingestion, load_news_raw
+        from src.data.news.investing import run_news_ingestion
         from src.features.news_features import normalize_news
         from src.llm.news_sentiment import process_news_with_llm, save_llm_features
 
