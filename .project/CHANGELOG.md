@@ -1,5 +1,135 @@
 # Changelog
 
+## [2026-04-25] - Scheduler in-process + wrapper agendavel do daily_eval
+
+**What changed:**
+
+- **`scripts/run_daily_eval.py`** — wrapper magrissimo do avaliador. Logica continua em `src/evaluation/daily_eval.py`. Wrapper existe pra dar entry point estavel pra schedulers (Task Scheduler, cron, NSSM, scheduler.py).
+- **`scripts/scheduler.py`** — scheduler in-process com lib `schedule`. Agenda **upload_to_s3.py @ 01:00 UTC** e **daily_eval @ 02:00 UTC** (gap de 1h pra archive de candles fechar antes do eval rodar). Converte UTC para horario local automaticamente (lib `schedule` opera em local time). Subprocess isolado por job — crash de 1 nao derruba o outro. Timeout de 30min por job. Flags `--dry-run` (mostra cronograma) e `--run-once {upload,eval}` (executa ad-hoc).
+- **Limitacao documentada no header:** `schedule` eh in-process, nao sobrevive reboot. Producao real -> Windows Task Scheduler chamando os scripts diretamente, ou rodar scheduler.py via NSSM como servico.
+- **Dependencia nova:** `schedule==1.2.2`.
+
+**Why:**
+- Centralizar entry points agendaveis em `scripts/` (convencao mental do usuario).
+- Daily eval rodando manual eh fricao garantida — esquece, perde candles do buffer. Scheduler in-process resolve enquanto a maquina estiver ligada.
+- Migrar para Task Scheduler depois eh trivial (3 linhas no GUI), mas comecar com `schedule` permite testar/iterar antes de gravar em pedra.
+
+**Operacao:**
+```bash
+python scripts/scheduler.py --dry-run     # confere horarios convertidos
+python scripts/scheduler.py --run-once eval  # roda 1x e sai (teste)
+python scripts/scheduler.py               # foreground, fica rodando
+```
+
+**Files:**
+- Created: `scripts/run_daily_eval.py`, `scripts/scheduler.py`
+- Modified: `requirements.txt`, `.project/CHANGELOG.md`, `README.md`
+
+---
+
+## [2026-04-24] - Avaliador batch diario + vault Obsidian + decisao bot/research separados
+
+**What changed:**
+
+- **Vault Obsidian (`vault/`)** versionado com o codigo: research, hypotheses, backtests, demo trading, postmortems, ideas. README + 6 templates (Hypothesis, Backtest, DemoSession, ResearchNote, Postmortem, Idea). `.gitignore` filtra UI state e capturas em 00-Inbox.
+
+- **Avaliador batch diario `src/evaluation/daily_eval.py`:**
+  - Cruza predicoes (schema enriquecido) vs candles reais em t+5/10/15min.
+  - Segmenta hit rate por model, symbol, session, regime, confidence bin, signal.
+  - Computa PnL bruto por modelo (BUY/SELL).
+  - **Archive local de candles** em `data/archive/candles/symbol=X/date=Y/` (UNION+dedup) — protege contra rotacao do buffer raw/.
+  - **Drift detection:** compara hit rate por modelo hoje vs media rolling 30d. Flag > 10pp.
+  - **Auto-execucao de hipoteses** declaradas em `vault/Hypotheses/*.md` com bloco `filters` no YAML frontmatter. Computa Wilson CI95, atribui verdict (UNDERPOWERED / REJECTED_WR / WEAK / PROMISING), append em "Daily eval log" no fim da nota.
+  - Gera relatorio markdown em `vault/Research/eval-daily/{date}.md`.
+  - Salva dataset em `data/research/eval_{date}.parquet`.
+  - CLI: `python -m src.evaluation.daily_eval [--date YYYY-MM-DD] [--from --to]`.
+
+- **Eval do dia 2026-04-24 (primeira execucao):** 12.550 predicoes, 11 simbolos, 5 modelos. **H1 (confidence_min=0.85)** retornou n=3946, hit_t1=63.6%, CI95 [62.1%, 65.1%], verdict=**PROMISING**. Sem drift flags. Ver `vault/Research/eval-daily/2026-04-24.md`.
+
+- **Eval ad-hoc inicial salva em `vault/Research/2026-04-24-eval-diaria-baseline.md`** (analise manual com 5 sinais de alerta + 5 hipoteses derivadas).
+
+- **2 hipoteses formalizadas em `vault/Hypotheses/`:**
+  - `2026-04-24-confidence-gate-085.md` — H1, com `filters` no frontmatter (auto-roda a cada eval).
+  - `2026-04-24-remover-ema-heuristic.md` — H4, counterfactual de ensemble.
+
+- **Decisoes arquiteturais novas em `.project/DECISIONS.md`:**
+  - **[017]** Bot de execucao e research em repos/processos separados, com faseamento 0-3 obrigatorio antes de dinheiro real (paper -> demo -> mini-real).
+  - **[018]** Avaliador eh batch diario (nao streaming), com auto-execucao segura de hipoteses no campo "Daily eval log" (nao toca no bloco "Resultado" formal que segue manual via `evaluate_filter`).
+
+- **Placeholder do bot em `vault/Ideas/2026-04-24-trading-bot-architecture.md`:** estrutura de repo separado, componentes criticos (risk gate, state machine, kill switch, reconciliation, idempotencia), comunicacao via file-drop, faseamento detalhado.
+
+- **Dependencias novas:** `tabulate==0.10.0` (para `to_markdown()` no daily_eval).
+
+**Why:**
+- Eval manual ad-hoc dura 1h por dia. Insustentavel — precisa virar pipeline.
+- Confidence calibration foi o achado mais robusto do baseline manual: gradiente monotonico claro nos bins de confidence, delta 18pp entre extremos. Vale auto-rodar diariamente para acompanhar.
+- Bot sem edge confirmado eh motor sem combustivel. Faseamento 0-3 forca disciplina antes de risco real.
+- Vault Obsidian co-localizada no repo da AI assistant contexto rico (research + codigo no mesmo lugar) sem misturar com `.project/` (que continua AI-optimized para navegar codigo).
+
+**Operacao:**
+```bash
+# Roda eval para data especifica
+python -m src.evaluation.daily_eval --date 2026-04-24
+
+# Roda range (catch-up depois de dias sem rodar)
+python -m src.evaluation.daily_eval --from 2026-04-24 --to 2026-04-30
+
+# Default: ontem UTC
+python -m src.evaluation.daily_eval
+```
+
+Cadencia recomendada: **diaria, end-of-day UTC** (ou imediatamente apos rodar `upload_to_s3.py`). Idempotente — pode rodar quantas vezes quiser na mesma data.
+
+**Files:**
+- Created: `src/evaluation/daily_eval.py`, `vault/` (estrutura completa), `vault/Research/eval-daily/2026-04-24.md`, `data/research/eval_2026-04-24.parquet`, `data/archive/candles/symbol=*/date=2026-04-24/part.parquet` (11 simbolos)
+- Modified: `.project/DECISIONS.md` (entries 017 e 018), `.project/CONTEXT.md`, `requirements.txt`, `vault/Hypotheses/2026-04-24-confidence-gate-085.md` (frontmatter `filters`), `vault/Templates/Hypothesis.md` (comentario sobre `filters`), `.gitignore` (regras Obsidian)
+
+---
+
+## [2026-04-23] - Enriquecimento do schema de predicoes + pipeline S3
+
+**What changed:**
+
+- **Schema enriquecido de `data/predictions/{SYMBOL}.parquet`** (`src/execution/engine.py`):
+  - Novas colunas gravadas por ciclo: `model_version`, `input_window`, `output_horizon`, `features_hash`, `confidence`, `signal`, `expected_return`, `regime_trend`, `regime_vol`, `regime_range`, `session`, `session_score`.
+  - `_save_predictions` passou a ser chamado **depois** de gerar signals/session para persistir contexto junto da predicao (antes gravava so `timestamp, model, pred_t1..t3, current_price`).
+  - `model_version` = `sha1(name+params+train_size)[:8]_YYYYMMDD`, registrado em `self._model_versions` apos cada treino.
+  - `features_hash` = sha1(X_infer)[:12] — permite deduplicar inputs identicos e auditar regressoes.
+  - Compatibilidade: linhas antigas ficam com NaN nas colunas novas (nao quebra concat/leitura).
+
+- **Script de migracao `scripts/migrate_predictions_schema.py`:**
+  - Idempotente. Varre `data/predictions/*.parquet` e adiciona colunas novas como `pd.NA` quando faltam, reordena para forma canonica, reescreve.
+  - Uso: `python scripts/migrate_predictions_schema.py --dry-run` e depois sem a flag.
+  - Necessario rodar **antes** do primeiro upload ao S3 pra que dados historicos + novos tenham schema uniforme (evita precisar de `union_by_name=true` em toda query Athena/DuckDB).
+
+- **Uploader S3 incremental `scripts/upload_to_s3.py`:**
+  - Particionamento Hive no bucket: `predictions/symbol=X/date=YYYY-MM-DD/part.parquet`, `candles/symbol=X/date=YYYY-MM-DD/part.parquet`, `news/date=YYYY-MM-DD/raw.parquet`, `news_llm/features.parquet`, `experiments/date=YYYY-MM-DD/runs.parquet`.
+  - Incremental via comparacao **md5 local vs ETag S3** antes de cada put: dias passados sobem 1 vez (depois `skip`), dia corrente re-sobe a cada execucao (arquivo pequeno).
+  - **Nao sobe:** `features/`, `backtest/`, `metrics/`, `logs/` (regeneravel a partir de `raw/` + codigo versionado).
+  - Usa `config.settings.s3` (env: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`).
+  - Flags: `--dry-run`, `--prefix <ambiente>`.
+
+- **Dependencia nova:** `boto3==1.42.94` (+ `botocore`, `jmespath`, `s3transfer`, `urllib3`) em `requirements.txt`.
+
+- **README.md reorganizado:** secao "Atualizacoes de Hoje" (~200 linhas) removida e movida para `.project/CHANGELOG_LEGACY.md`. README agora aponta para CHANGELOG.md / CHANGELOG_LEGACY.md / DECISIONS.md.
+
+**Why:**
+- Schema antigo (`timestamp, model, pred_t1..t3, current_price`) nao permitia segmentar edge por contexto — impossivel responder "o modelo tem edge em London overlap com confidence > 0.8?" sem juntar 3 arquivos diferentes.
+- Avaliador automatico de estrategias (modelo + guardrails + regime) precisa das features de contexto gravadas **no mesmo row** da predicao, senao vira ETL retroativo caro.
+- S3 Hive-partitioned permite queries predicate-pushdown em DuckDB/Athena direto sobre o bucket, sem baixar tudo localmente.
+- Incremental por ETag evita re-upload desnecessario e mantem historico imutavel (MT5 pode revisar candles; nosso snapshot no S3 eh a fonte).
+
+**Operacao:**
+- Ordem de rollout: (1) restart do preditor pra ativar schema novo, (2) rodar `migrate_predictions_schema.py` uma vez, (3) rodar `upload_to_s3.py --dry-run`, (4) upload real. Cadencia sugerida em producao: a cada 1h ou end-of-day (fora do loop de predicao).
+
+**Files:**
+- Modified: `src/execution/engine.py`, `requirements.txt`, `README.md`
+- Created: `scripts/migrate_predictions_schema.py`, `scripts/upload_to_s3.py`, `.project/CHANGELOG_LEGACY.md`
+
+**Testes:** 501 Python passando apos o patch (smoke + imports do engine + syntax check).
+
+---
+
 ## [2026-04-17] - Tiered coverage gates + property tests + mutation testing setup
 
 **What changed:**

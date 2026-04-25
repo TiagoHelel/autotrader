@@ -3,16 +3,43 @@
 > **This is the most important file for AI assistants. Keep it current.**
 > Update this at the start or end of every session.
 
-_Last updated: 2026-04-17_
+_Last updated: 2026-04-24_
 
 ---
 
 ## Current Phase
 
-Active development — Sistema completo com previsao -> decisao -> backtest -> ranking -> selecao automatica + session awareness + validacao robusta CPCV.
+**Fase 0 do faseamento bot/research** (decisao [017]): acumulando dados com schema
+enriquecido, rodando avaliador batch diario, formulando hipoteses formais em
+`vault/Hypotheses/`. Bot de execucao **nao deve ser construido** ate H1 (ou
+equivalente) validar em holdout 30d.
 
 ## What's happening right now
 
+- **Avaliador batch diario implementado (2026-04-24):** `src/evaluation/daily_eval.py`
+  cruza pred vs real, segmenta por contexto, detecta drift, auto-executa hipoteses
+  com `filters` no frontmatter, gera relatorio em `vault/Research/eval-daily/{date}.md`.
+  Idempotente. Rodar diariamente (`python -m src.evaluation.daily_eval`).
+  - **Primeira execucao (2026-04-24):** 12.550 predicoes; H1 (confidence>=0.85) deu
+    PROMISING com hit_t1=63.6%, CI95 [62.1%, 65.1%]. **NAO eh edge confirmado** (1 dia).
+- **Vault Obsidian (`vault/`)** versionada no repo: research, hypotheses, backtests,
+  demo trading, postmortems, ideas + 6 templates. Co-locada com codigo, alimenta
+  contexto da AI assistant.
+- **2 hipoteses ativas em `vault/Hypotheses/`:** H1 confidence-gate (auto-rodando),
+  H4 remover ema_heuristic (manual ainda).
+- **Decisao [017] - Bot/research separados:** quando vier execucao real, ficara em
+  repo separado (`trading-bot/`), pequeno (<1500 LOC), com faseamento obrigatorio
+  paper -> demo -> mini-real. Placeholder em `vault/Ideas/2026-04-24-trading-bot-architecture.md`.
+- **Decisao [018] - Eval batch (nao streaming):** edge discovery e estatisticamente
+  lento, batch end-of-day eh tamanho certo. LLM priorization (camada 2) fica para
+  depois.
+- **Schema enriquecido de predicoes + pipeline S3 (2026-04-23):**
+  - `data/predictions/{SYMBOL}.parquet` agora grava `model_version`, `features_hash`, `confidence`, `signal`, `expected_return`, `regime_trend/vol/range`, `session`, `session_score`, `input_window`, `output_horizon` junto de cada row. `_save_predictions` roda depois de signals/session em `src/execution/engine.py`.
+  - Novos scripts: `scripts/migrate_predictions_schema.py` (backfill de colunas novas como NA nos historicos, idempotente) e `scripts/upload_to_s3.py` (Hive-partitioned, incremental via md5 vs ETag).
+  - S3 layout: `predictions/symbol=X/date=Y/`, `candles/symbol=X/date=Y/`, `news/date=Y/`, `experiments/date=Y/`. `features/`, `backtest/`, `metrics/`, `logs/` nao sobem (regeneraveis).
+  - `boto3==1.42.94` adicionado.
+  - README reorganizado: secao "Atualizacoes de Hoje" (~200 linhas) movida para `.project/CHANGELOG_LEGACY.md`; README aponta pra CHANGELOG + CHANGELOG_LEGACY + DECISIONS.
+  - **Proximos:** (1) restart do preditor + rodar migrate + primeiro upload; (2) construir avaliador de estrategias em 2 camadas (deterministica com CPCV + LLM pra priorizar hipoteses).
 - **Coverage + quality gate (2026-04-17):** tiered coverage + property tests + mutation testing setup.
   - `src/execution/engine.py` 45%→**99.5%**, `execution/loop.py` 58%→**100%**, `features/session.py` 65%→**100%**, `features/engineering.py` 78%→**98%**.
   - **Tiered CI gate** em `scripts/check_coverage_tiers.py`: CRITICAL (execution/decision/backtest/mt5/cpcv) **96.6%** ≥ 90%, ML (models/features/evaluation/research) **80.3%** ≥ 80%, OVERALL **85.1%** ≥ 75%. Todos passam.
@@ -145,7 +172,10 @@ Active development — Sistema completo com previsao -> decisao -> backtest -> r
 
 ## Active blockers
 
-- Configurar credenciais AWS S3 (para backup remoto)
+- **Acumular >= 14 dias de daily_eval** antes de qualquer trabalho em bot. H1 precisa ficar PROMISING/STRONG em janela 14d para virar candidata a holdout formal.
+- **Validar H1 em holdout temporal 30d** via `conditional_analysis.evaluate_filter` (cuidar do Bonferroni cumulativo). Holdout so pode ser usado UMA vez por filter_hash.
+- Rodar `daily_eval` todo dia (idealmente cron noturno UTC). Sem isso, candles antigos saem do buffer raw/ antes de virem arquivados.
+- Confirmar credenciais AWS no `.env` se for ativar S3 upload.
 
 ## Known issues / tech debt
 

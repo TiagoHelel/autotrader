@@ -9,3 +9,6 @@ start "" cmd /k "cd command_center/frontend && npm run dev"
 
 :: Loop ML
 start "" cmd /k "call venv/Scripts/activate && python -m src.execution.loop"
+
+:: Scheduler (upload S3 @ 01:00 UTC, daily eval @ 02:00 UTC)
+start "AutoTrader Scheduler" cmd /k "call venv/Scripts/activate && python scripts/scheduler.py"

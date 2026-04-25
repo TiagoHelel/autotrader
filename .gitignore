@@ -72,3 +72,18 @@ htmlcov/
 
 # AWS
 .aws/
+
+# Obsidian (vault/) — committar config compartilhavel; ignorar UI state, cache e capturas locais
+vault/.obsidian/workspace
+vault/.obsidian/workspace.json
+vault/.obsidian/workspace-mobile.json
+vault/.obsidian/workspaces.json
+vault/.obsidian/cache
+vault/.obsidian/graph.json
+vault/.obsidian/canvas.json
+vault/.obsidian/*.json.bak
+vault/.trash/
+
+# 00-Inbox e capturas rapidas — locais, nao subir (revisar e mover pra pasta certa)
+vault/00-Inbox/*.md
+!vault/00-Inbox/.gitkeep

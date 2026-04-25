@@ -78,7 +78,8 @@
       "Bash(npx vitest:*)",
       "Bash(awk -F'|' '$5+0 < 80 && $2+0 > 0 {print $1, \"lines=\"$5, \"stmts=\"$2}')",
       "Bash(awk -F'|' '{gsub\\(/^ +| +$/, \"\", $1\\); gsub\\(/ /, \"\", $5\\); print $5, $1}')",
-      "Bash(awk -F'|' '{gsub\\(/^ +| +$/, \"\", $1\\); gsub\\(/ /, \"\", $5\\); if \\($5+0 < 80\\) print $5, $1, $6}')"
+      "Bash(awk -F'|' '{gsub\\(/^ +| +$/, \"\", $1\\); gsub\\(/ /, \"\", $5\\); if \\($5+0 < 80\\) print $5, $1, $6}')",
+      "Bash(git check-ignore *)"
     ]
   }
 }

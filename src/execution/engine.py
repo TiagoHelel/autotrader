@@ -4,6 +4,7 @@ Orquestra coleta, features, modelos e avaliacao para cada ciclo.
 Integra regime de mercado, noticias e LLM sentiment.
 """
 
+import hashlib
 import logging
 from datetime import datetime
 
@@ -68,6 +69,18 @@ class PredictionEngine:
         self._cycle_count = 0
         self._news_df = pd.DataFrame()  # cache de noticias normalizadas
         self._llm_df = pd.DataFrame()   # cache de features LLM
+        self._model_versions: dict[str, dict[str, str]] = {}  # {symbol: {model_name: version}}
+
+    @staticmethod
+    def _features_hash(X: np.ndarray) -> str:
+        arr = np.ascontiguousarray(X, dtype=np.float64)
+        return hashlib.sha1(arr.tobytes()).hexdigest()[:12]
+
+    @staticmethod
+    def _model_version(model, train_size: int) -> str:
+        payload = f"{model.name}|{sorted((model.params or {}).items())}|{train_size}"
+        h = hashlib.sha1(payload.encode()).hexdigest()[:8]
+        return f"{h}_{datetime.utcnow().strftime('%Y%m%d')}"
 
     def run_cycle(self, conn: MT5Connection) -> dict:
         """
@@ -159,6 +172,12 @@ class PredictionEngine:
                 result["train"] = train_results
                 self._trained.add(symbol)
 
+                # Registra versao de cada modelo treinado
+                versions = self._model_versions.setdefault(symbol, {})
+                for m in self.registry.get_models(symbol):
+                    if m.is_fitted:
+                        versions[m.name] = self._model_version(m, len(X))
+
                 # Feature importance (XGBoost + RF)
                 self._save_feature_importance(symbol, featured_df)
 
@@ -184,8 +203,6 @@ class PredictionEngine:
             for name, pred in predictions.items()
         }
 
-        # Salvar previsoes
-        self._save_predictions(symbol, predictions, current_price)
         result["predictions"] = {
             name: pred[0].tolist() for name, pred in predictions.items()
         }
@@ -208,6 +225,17 @@ class PredictionEngine:
             {name: pred[0].tolist() for name, pred in predictions.items()},
             current_price,
             session_score=session_score,
+        )
+
+        # Salvar previsoes (schema enriquecido, apos signals/session)
+        self._save_predictions(
+            symbol=symbol,
+            predictions=predictions,
+            current_price=current_price,
+            X_infer=X_infer,
+            signals=signals,
+            regime=regime,
+            session_info=session_info,
         )
         result["signals"] = {
             name: {"signal": s["signal"], "confidence": s["confidence"], "expected_return": s["expected_return"]}
@@ -252,24 +280,49 @@ class PredictionEngine:
         symbol: str,
         predictions: dict[str, np.ndarray],
         current_price: float,
+        X_infer: np.ndarray | None = None,
+        signals: dict | None = None,
+        regime: dict | None = None,
+        session_info: dict | None = None,
     ) -> None:
-        """Salva previsoes em parquet."""
+        """Salva previsoes em parquet com schema enriquecido para avaliador."""
         pred_dir = settings.predictions_dir
         pred_dir.mkdir(parents=True, exist_ok=True)
         filepath = pred_dir / f"{symbol}.parquet"
 
         timestamp = datetime.utcnow().isoformat()
-        rows = []
+        features_hash = self._features_hash(X_infer) if X_infer is not None and X_infer.size else None
+        regime = regime or {}
+        session_info = session_info or {}
+        signals = signals or {}
+        versions = self._model_versions.get(symbol, {})
 
+        active_sessions = session_info.get("active_sessions") or []
+        session_label = ",".join(active_sessions) if active_sessions else "none"
+
+        rows = []
         for model_name, pred in predictions.items():
+            sig = signals.get(model_name, {}) or {}
             rows.append({
                 "timestamp": timestamp,
                 "symbol": symbol,
                 "model": model_name,
+                "model_version": versions.get(model_name),
                 "current_price": current_price,
                 "pred_t1": float(pred[0][0]),
                 "pred_t2": float(pred[0][1]),
                 "pred_t3": float(pred[0][2]),
+                "input_window": settings.input_window,
+                "output_horizon": settings.output_horizon,
+                "features_hash": features_hash,
+                "confidence": float(sig.get("confidence")) if sig.get("confidence") is not None else None,
+                "signal": sig.get("signal"),
+                "expected_return": float(sig.get("expected_return")) if sig.get("expected_return") is not None else None,
+                "regime_trend": regime.get("trend_label"),
+                "regime_vol": regime.get("volatility_label"),
+                "regime_range": regime.get("range_label"),
+                "session": session_label,
+                "session_score": float(session_info.get("session_score")) if session_info.get("session_score") is not None else None,
             })
 
         new_df = pd.DataFrame(rows)

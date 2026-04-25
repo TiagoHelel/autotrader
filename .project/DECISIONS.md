@@ -4,6 +4,52 @@
 
 ---
 
+### [018] — Avaliador batch diario (camada 1) com auto-execucao de hipoteses
+
+- **Date:** 2026-04-24
+- **Status:** implemented
+- **Decision:** Avaliador automatico de estrategias eh **batch diario**, nao streaming. Implementado em `src/evaluation/daily_eval.py`. Camada 1 (deterministica) cruza pred vs real, segmenta por contexto, detecta drift vs baseline 30d, **auto-executa hipoteses** declaradas em `vault/Hypotheses/*.md` com `filters` no YAML frontmatter, e gera relatorio markdown em `vault/Research/eval-daily/{date}.md`. Camada 2 (LLM priorization) fica para fase futura.
+- **Alternatives considered:**
+  - **(A) Streaming/online evaluation:** desperdicio de compute (CPCV/Bonferroni precisam de volume amostral acumulado), perde reprodutibilidade (replay vira pesadelo), inflaciona LLM cost.
+  - **(B) Avaliador no mesmo processo do predictor:** acopla research a runtime de predicao. Bug em pandas analytics derruba ciclo de predicao.
+  - **(C, escolhida) Batch end-of-day separado, idempotente, com archive local:** baixo custo, alta replay-ability, falha isolada do predictor, semantica clara de "fechamento do dia".
+- **Reasoning:**
+  - **Edge discovery e estatisticamente lento.** CI95 mexe pouco entre minutos. 1x/dia eh suficiente.
+  - **Reproducibilidade > latencia.** Toda metrica precisa ser re-derivavel a partir dos parquets — batch garante isso.
+  - **Auto-rodar hipoteses no daily eval e seguro** porque (a) escreve em "Daily eval log" no fim da nota, nao no bloco "Resultado" (esse continua reservado pro `evaluate_filter` formal com holdout), (b) Wilson CI95 simplificado, (c) verdict tracking eh tendencia diaria, nao decisao final.
+- **Consequences:**
+  - Pipeline simples: `python -m src.evaluation.daily_eval --date YYYY-MM-DD`. Idempotente.
+  - Cada hipotese com `filters` no frontmatter ganha tendencia diaria automatica.
+  - Validacao formal continua manual via `conditional_analysis.evaluate_filter` (holdout protegido, Bonferroni cumulativo).
+  - Drift detection > 10pp gera flag no relatorio mas nao age — humano revisa.
+
+---
+
+### [017] — Bot de execucao e research sao processos/repos separados (faseamento 0-3)
+
+- **Date:** 2026-04-24
+- **Status:** decided (placeholder em `vault/Ideas/2026-04-24-trading-bot-architecture.md`)
+- **Decision:** Quando o AutoTrader for evoluir para execucao real de ordens, o bot ficara em **repo/processo separado** (`trading-bot/`). O AutoTrader atual continua sendo **plataforma de research e geracao de sinais**. Comunicacao via file-drop (signals JSON) ou HTTP polling. Faseamento obrigatorio antes de dinheiro real:
+  - **Fase 0 (semanas 1-2):** acumular dados + rodar `daily_eval` manual diario. Sem bot ainda.
+  - **Fase 1 (semanas 3-4):** se H1 (confidence-gate 0.85) ou outras hipoteses ficarem PROMISING em 14d, bot vira paper-trading (zero ordem real, simula execucao com spread real).
+  - **Fase 2 (semanas 5-8):** demo account no broker. Aparecem slippage real, latencia, requote.
+  - **Fase 3 (semanas 9+):** conta real, position size minima ($100 risk/trade), 30 dias. Se PnL bater com demo, sobe size devagar.
+- **Alternatives considered:**
+  - **(A) Bot integrado ao AutoTrader (mesmo processo):** mais simples mas mistura SLAs incompativeis. Bug em research crash o order router. Surface de codigo enorme em algo que precisa ser pequeno e auditavel. Recusado.
+  - **(B) Microservices completos (OMS dedicado, risk service separado):** over-engineering para solo trader. Recusado.
+  - **(C, escolhida) Dois processos, dois repos, comunicacao por arquivo/HTTP:** separacao real, simples para 1 pessoa manter, padrao da industria adaptado a escala individual.
+- **Reasoning:**
+  - **Bot precisa ser pequeno (~500-1500 LOC).** Order router + risk gate + position manager + state machine + kill switch + reconciliation. Cada linha auditavel.
+  - **Diferenca de SLA:** research pode crashar e re-rodar. Bot com posicao aberta nao pode crashar.
+  - **Faseamento elimina classe diferente de bug a cada fase:** paper -> lifecycle de ordem sem dinheiro; demo -> slippage/latency real; real-mini -> psicologia + custos.
+  - **Construir bot antes de ter edge confirmado = motor sem combustivel.** Prioridade absoluta: validar H1 em janela 30d antes de qualquer linha de codigo de execucao real.
+- **Consequences:**
+  - Bot fica em repo separado quando vier (visibilidade de mudancas, deploy independente).
+  - AutoTrader expoe sinais via API existente ou file-drop em `data/signals_pending/`.
+  - **Nada de codigo de execucao real neste repo ate H1 validar em holdout 30d.**
+
+---
+
 ### [001] — Validacao com CPCV (Purge + Embargo)
 
 - **Date:** 2026-04-07 (decided) / 2026-04-13 (implemented)
