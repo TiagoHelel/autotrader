@@ -160,6 +160,52 @@ def path_columns(df: pd.DataFrame, col: str) -> list:
     return list(df.columns) if col in df.columns else []
 
 
+def upload_agent_researcher(client, bucket, prefix, dry_run, log) -> None:
+    """Upload runtime artifacts of the autonomous research agent.
+
+    Layout in the bucket::
+
+        agent_researcher/state/state-YYYY-MM-DD.json    # daily snapshot
+        agent_researcher/strategies/active/<id>.json
+        agent_researcher/strategies/rejected/<id>.json
+        agent_researcher/prompts/date=YYYY-MM-DD/<file> # full audit trail
+
+    The snapshot key includes today's UTC date so we never overwrite
+    yesterday's holdout-tracking state — losing it would break the
+    one-shot holdout discipline.
+    """
+    base = ROOT / "src" / "agent_researcher"
+    state_path = base / "state.json"
+    if state_path.exists():
+        today = pd.Timestamp.utcnow().strftime("%Y-%m-%d")
+        upload_single(
+            client, bucket, prefix,
+            f"agent_researcher/state/state-{today}.json",
+            state_path, dry_run, log,
+        )
+
+    for sub in ("active", "rejected"):
+        for path in sorted((base / "strategies" / sub).glob("*.json")):
+            upload_single(
+                client, bucket, prefix,
+                f"agent_researcher/strategies/{sub}/{path.name}",
+                path, dry_run, log,
+            )
+
+    prompts_dir = base / "tmp" / "prompts"
+    if prompts_dir.exists():
+        for path in sorted(prompts_dir.glob("*")):
+            if not path.is_file():
+                continue
+            date = pd.Timestamp.utcfromtimestamp(path.stat().st_mtime)
+            date_str = date.strftime("%Y-%m-%d")
+            upload_single(
+                client, bucket, prefix,
+                f"agent_researcher/prompts/date={date_str}/{path.name}",
+                path, dry_run, log,
+            )
+
+
 def upload_single(client, bucket, prefix, key_suffix, path, dry_run, log):
     if not path.exists():
         return
@@ -229,6 +275,8 @@ def main() -> None:
 
     upload_single(client, bucket, prefix, "news_llm/features.parquet",
                   data_dir / "news" / "llm_features.parquet", args.dry_run, log)
+
+    upload_agent_researcher(client, bucket, prefix, args.dry_run, log)
 
     counts = {"upload": 0, "skip": 0, "would-upload": 0}
     for status, key, rows in log:

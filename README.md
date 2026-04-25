@@ -455,6 +455,35 @@ Validacao formal continua manual via `conditional_analysis.evaluate_filter`
 
 ---
 
+## Weekend Gate (Forex Closed)
+
+O Forex fecha sex 22:00 UTC e reabre dom 22:00 UTC. Decisao [021] formaliza um
+gate em camadas para nao gerar/exibir/avaliar sinais com mercado fechado:
+
+- `src/features/session.is_market_open(timestamp)` retorna `False` na janela
+  fechada. `compute_session_features` zera todas as session features quando
+  fechado, forcando `session_score=0` (que ja aciona `HOLD forcado` no signal).
+- `PredictionEngine.run_cycle` skipa o ciclo retornando
+  `{"skipped": "market_closed", "symbols": {}}`.
+- `daily_eval.run_for_date` filtra predicoes feitas com mercado fechado antes
+  de cruzar com candles (sem proxima vela real, `hit_t1` viraria ruido).
+- `agent_researcher.hypothesis_generator.load_daily_eval_summary` aplica o
+  mesmo filtro nos parquets que viram contexto pro LLM.
+- Endpoint `GET /api/predict/signals/radar` retorna
+  `{"market_closed": true, "signals": [], "total": 0, ...}` antes de
+  consultar o cache, evitando devolver sinais stale.
+- Frontend: componente `MarketStatusBanner` no topo do Control Tower aparece
+  com fundo amarelo (warning) ou verde-neon (Matrix) quando o gate esta
+  ativo; `SignalBoard` mostra "MARKET CLOSED" no corpo.
+
+> Testes que exercitam `/signals/radar` ou `daily_eval` mockam
+> `src.features.session.is_market_open` (fixture `_force_market_open`) para
+> nao virarem flaky por dia da semana — cobertura do gate em si fica em
+> `tests/features/test_session.py::TestIsMarketOpen` e
+> `tests/api/test_signals.py::test_radar_returns_market_closed_when_forex_shut`.
+
+---
+
 ## Agent Researcher Autonomo
 
 `src/agent_researcher/` implementa um agente de pesquisa autonomo que usa

@@ -199,6 +199,18 @@ class TestListPredictions:
 # ========================= /signals/radar =========================
 
 class TestRadarSignals:
+    @pytest.fixture(autouse=True)
+    def _force_market_open(self, monkeypatch):
+        """Radar tests assume the Forex market is open.
+
+        Closed-state coverage lives in tests/api/test_signals.py and
+        tests/features/test_session.py.
+        """
+        monkeypatch.setattr(
+            "src.features.session.is_market_open",
+            lambda *args, **kwargs: True,
+        )
+
     def test_all_symbols_hold_when_no_data(self, client, fake_project):
         res = client.get("/api/predict/signals/radar")
         assert res.status_code == 200

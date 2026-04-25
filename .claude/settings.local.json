@@ -89,7 +89,11 @@
       "Bash(awk '{print $NF}')",
       "Bash(xargs cat *)",
       "Bash(env)",
-      "Bash(opencode agent *)"
+      "Bash(opencode agent *)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(grep -vE \"\\\\.py$|__pycache__|^total|^\\\\.\")"
     ]
   }
 }

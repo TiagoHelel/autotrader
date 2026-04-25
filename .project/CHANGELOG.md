@@ -1,5 +1,65 @@
 # Changelog
 
+## [2026-04-25] - Weekend gate + market-closed banner
+
+**What changed:**
+
+- `src/features/session.py`: nova funcao publica `is_market_open(ts)`. Forex
+  fechado sex 22:00 UTC -> dom 22:00 UTC. `compute_session_features` zera
+  features quando fechado.
+- `src/execution/engine.run_cycle`: skip imediato quando fechado, retorna
+  `{"skipped": "market_closed", "symbols": {}}`.
+- `src/evaluation/daily_eval.run_for_date`: filtra predicoes feitas com
+  mercado fechado antes de cruzar com candles.
+- `src/agent_researcher/hypothesis_generator.load_daily_eval_summary`: mesmo
+  filtro aplicado ao alimentar contexto pro LLM.
+- API `/api/predict/signals/radar` retorna
+  `{"market_closed": true, "signals": [], "total": 0, ...}` antes do cache.
+- Frontend: novo `MarketStatusBanner` no Control Tower; `SignalBoard` mostra
+  "MARKET CLOSED" no corpo.
+
+**Why:**
+- Sabado o Signal Board estava mostrando sinais de venda em mercado fechado.
+  Isso ainda nao virava ordem real (nao existe bot ainda — decisao [017]),
+  mas contaminava `daily_eval` e o contexto do `agent_researcher`. Defesa em
+  camadas para cortar a contaminacao na origem.
+
+**Tests:**
+- 12 testes novos cobrindo o gate (`TestIsMarketOpen`, skip do engine,
+  short-circuit do endpoint).
+- Fixture `_force_market_open` em `tests/api/test_signals.py`,
+  `test_data_integrity.py` e `test_predictions_comprehensive.py::TestRadarSignals`.
+- `pytest -q`: **522 passed**. Vitest: **245 passed**.
+
+---
+
+## [2026-04-25] - Stop tracking runtime artifacts; agent_researcher backups to S3
+
+**What changed:**
+
+- `.gitignore`:
+  - `command_center/backend/*.db` (e variantes `-journal`/`-wal`/`-shm`).
+  - `src/agent_researcher/state.json`,
+    `src/agent_researcher/strategies/{active,rejected}/*.json`,
+    `src/agent_researcher/tmp/`.
+- `git rm --cached command_center/backend/autotrader_cc.db` — backend recria
+  schema com `CREATE TABLE IF NOT EXISTS`.
+- `scripts/upload_to_s3.py`: nova `upload_agent_researcher`. Layout:
+  - `agent_researcher/state/state-YYYY-MM-DD.json` (snapshot diario, sem
+    overwrite — se perder a maquina, restaura ate o dia anterior; sem ele
+    o anti-snooping de holdout / Bonferroni cai).
+  - `agent_researcher/strategies/{active,rejected}/<id>.json`.
+  - `agent_researcher/prompts/date=YYYY-MM-DD/<file>` (audit trail completo
+    dos prompts e raw outputs do LLM).
+
+**Why:**
+- O `.db` produzia churn em `git status` toda execucao. O `state.json` do
+  agente nao tinha gitignore — era acidente esperando para virar PR. As
+  estrategias e prompts sao runtime, mas precisam de backup forense:
+  S3 e a fonte de verdade.
+
+---
+
 ## [2026-04-25] - Agent researcher: integracao OpenCode end-to-end
 
 **What changed:**

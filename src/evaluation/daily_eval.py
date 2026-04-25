@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 
 from config.settings import settings
+from src.features.session import is_market_open
 
 logger = logging.getLogger(__name__)
 
@@ -501,6 +502,9 @@ def run_for_date(date: str) -> dict:
         pred = pred[pred["timestamp"].dt.date == target].copy()
         if "model_version" in pred.columns:
             pred = pred[pred["model_version"].notna()]
+        # Drop predicoes feitas com Forex fechado (sex 22:00 UTC -> dom 22:00 UTC).
+        # Sem proxima vela real, hit_t1 vira ruido.
+        pred = pred[pred["timestamp"].apply(is_market_open)]
         if pred.empty:
             continue
 

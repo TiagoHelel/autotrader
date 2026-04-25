@@ -19,6 +19,7 @@ from src.features.session import (
     add_session_features,
     compute_session_features,
     get_current_session_info,
+    is_market_open,
 )
 
 
@@ -209,3 +210,49 @@ class TestGetCurrentSessionInfo:
         info = get_current_session_info(None)
         assert info["symbol"] is None
         assert info["weights"] is not None
+
+
+# =============================== is_market_open ===============================
+
+
+class TestIsMarketOpen:
+    """Forex closes Friday 22:00 UTC, reopens Sunday 22:00 UTC."""
+
+    def test_open_on_weekday(self):
+        # Wednesday 12:00 UTC
+        assert is_market_open(pd.Timestamp("2026-04-22 12:00", tz="UTC")) is True
+
+    def test_open_on_friday_before_close(self):
+        # Friday 21:59 UTC -> still open
+        assert is_market_open(pd.Timestamp("2026-04-24 21:59", tz="UTC")) is True
+
+    def test_closed_on_friday_at_close(self):
+        # Friday 22:00 UTC -> closed
+        assert is_market_open(pd.Timestamp("2026-04-24 22:00", tz="UTC")) is False
+
+    def test_closed_on_saturday(self):
+        # Saturday any hour -> closed
+        assert is_market_open(pd.Timestamp("2026-04-25 12:00", tz="UTC")) is False
+        assert is_market_open(pd.Timestamp("2026-04-25 23:30", tz="UTC")) is False
+
+    def test_closed_on_sunday_before_reopen(self):
+        # Sunday 21:59 UTC -> still closed
+        assert is_market_open(pd.Timestamp("2026-04-26 21:59", tz="UTC")) is False
+
+    def test_open_on_sunday_at_reopen(self):
+        # Sunday 22:00 UTC -> open
+        assert is_market_open(pd.Timestamp("2026-04-26 22:00", tz="UTC")) is True
+
+    def test_open_on_monday(self):
+        assert is_market_open(pd.Timestamp("2026-04-27 03:00", tz="UTC")) is True
+
+    def test_nan_returns_false(self):
+        assert is_market_open(pd.NaT) is False
+
+    def test_features_zeroed_when_closed(self):
+        feats = compute_session_features(
+            pd.Timestamp("2026-04-25 12:00", tz="UTC"), symbol="EURUSD",
+        )
+        for col in SESSION_FEATURE_COLUMNS:
+            assert feats[col] == 0 or feats[col] == 0.0
+

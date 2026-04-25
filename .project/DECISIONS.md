@@ -4,6 +4,35 @@
 
 ---
 
+### [021] - Weekend gate em camadas (engine + eval + API + UI)
+
+- **Date:** 2026-04-25
+- **Status:** implemented
+- **Decision:** Forex fechado (sex 22:00 UTC -> dom 22:00 UTC) e tratado em
+  multiplas camadas: features (`is_market_open` zera session features),
+  engine (`run_cycle` skipa), avaliador batch (`daily_eval` filtra rows),
+  agent_researcher (filtra contexto LLM), API (`/signals/radar` retorna
+  `market_closed: true`), UI (`MarketStatusBanner` no Control Tower).
+- **Reasoning:**
+  - Defesa em profundidade: cada camada protege a proxima. Se uma falhar,
+    a seguinte ainda gateia.
+  - Sinal de venda visivel em sabado erodia confianca da UI; pior, predicoes
+    de fim de semana viravam linhas em `eval_*.parquet` e contaminavam
+    `daily_eval` (sem proxima vela real, `hit_t1` vira ruido) e o contexto
+    que o agente OpenCode usa para propor hipoteses.
+  - Quando o bot real existir (decisao [017]), `is_market_open` sera o
+    primeiro hard gate antes de qualquer ordem, somado ao gate implicito
+    do broker.
+- **Consequences:**
+  - Testes que exercitam `/signals/radar` precisam mockar
+    `src.features.session.is_market_open` para nao virarem flaky por dia da
+    semana. Padrao adotado: fixture `_force_market_open` em cada arquivo.
+  - Janela escolhida e conservadora (alguns brokers reabrem dom 21:00 UTC
+    no verao do hemisferio norte). Trade-off aceitavel: alguns minutos de
+    sinais filtrados a mais, em troca de cobertura simples e segura.
+
+---
+
 ### [020] - Agent OpenCode customizado com tools restritos
 
 - **Date:** 2026-04-25

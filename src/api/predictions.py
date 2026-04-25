@@ -248,11 +248,23 @@ def get_radar_signals():
     mesmo os sem dados (signal=HOLD, confidence=0).
     """
     from src.decision.signal import generate_signal
+    from src.features.session import is_market_open
     from src.mt5.symbols import DESIRED_SYMBOLS
+
+    now_utc = datetime.utcnow()
+
+    if not is_market_open(now_utc):
+        return {
+            "signals": [],
+            "total": 0,
+            "breakdown": {"BUY": 0, "SELL": 0, "HOLD": 0},
+            "market_closed": True,
+            "message": "Forex market is closed (Fri 22:00 UTC -> Sun 22:00 UTC).",
+        }
 
     cache_until = _radar_cache.get("until")
     cache_payload = _radar_cache.get("payload")
-    if cache_until and cache_payload and datetime.utcnow() < cache_until:
+    if cache_until and cache_payload and now_utc < cache_until:
         return cache_payload
 
     pred_dir = settings.predictions_dir
@@ -348,9 +360,10 @@ def get_radar_signals():
         "signals": results,
         "total": len(results),
         "breakdown": {"BUY": buy_count, "SELL": sell_count, "HOLD": hold_count},
+        "market_closed": False,
     }
     _radar_cache["payload"] = payload
-    _radar_cache["until"] = datetime.utcnow() + timedelta(seconds=RADAR_CACHE_TTL_SECONDS)
+    _radar_cache["until"] = now_utc + timedelta(seconds=RADAR_CACHE_TTL_SECONDS)
     return payload
 
 

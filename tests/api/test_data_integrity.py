@@ -5,6 +5,15 @@ import math
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _force_market_open(monkeypatch):
+    """Integrity tests pin Forex open; closed-state has dedicated tests."""
+    monkeypatch.setattr(
+        "src.features.session.is_market_open",
+        lambda *args, **kwargs: True,
+    )
+
+
 def test_signal_matches_prediction(client, has_predictions):
     """Radar deve conter entrada para EURUSD e confidence coerente."""
     if not has_predictions:

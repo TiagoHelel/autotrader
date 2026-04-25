@@ -2,6 +2,7 @@ import { lazy, Suspense, memo, useState, useCallback } from 'react'
 import useWebSocket from '../hooks/useWebSocket'
 import KPICards from '../components/dashboard/KPICards'
 import LoadingSpinner from '../components/common/LoadingSpinner'
+import MarketStatusBanner from '../components/common/MarketStatusBanner'
 import { useTheme } from '../theme/ThemeProvider'
 
 // Lazy load heavy components
@@ -54,6 +55,8 @@ export default function ControlTower() {
           </>
         )}
       </div>
+
+      <MarketStatusBanner />
 
       {/* KPI Strip (now 7 cards incl. 30D Trend sparkline) */}
       <MemoKPICards wsKpis={kpis} />

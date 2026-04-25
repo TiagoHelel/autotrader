@@ -50,6 +50,7 @@ export default function SignalBoard() {
 
   const breakdown = radarData?.breakdown || { BUY: 0, SELL: 0, HOLD: 0 }
   const total = radarData?.total || 0
+  const marketClosed = radarData?.market_closed === true
   const isMatrix = theme === 'matrix'
 
   return (
@@ -94,14 +95,23 @@ export default function SignalBoard() {
 
       {/* Signal rows */}
       <div className="flex-1 overflow-y-auto mt-1 space-y-0.5">
-        {signals.length === 0 && (
+        {marketClosed ? (
+          <div
+            data-testid="signal-board-market-closed"
+            className="flex items-center justify-center h-full text-xs uppercase tracking-widest"
+            style={{ color: 'var(--theme-text-muted)' }}
+          >
+            Market closed
+          </div>
+        ) : signals.length === 0 ? (
           <div className="flex items-center justify-center h-full text-xs" style={{ color: 'var(--theme-text-muted)' }}>
             Waiting for signals...
           </div>
+        ) : (
+          signals.map((sig) => (
+            <SignalRow key={sig.symbol} sig={sig} flash={!!flashMap[sig.symbol]} isMatrix={isMatrix} />
+          ))
         )}
-        {signals.map((sig) => (
-          <SignalRow key={sig.symbol} sig={sig} flash={!!flashMap[sig.symbol]} isMatrix={isMatrix} />
-        ))}
       </div>
 
       {/* Legend */}

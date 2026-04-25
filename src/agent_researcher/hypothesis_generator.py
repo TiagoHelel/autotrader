@@ -13,6 +13,7 @@ from src.agent_researcher.models import Hypothesis
 from src.agent_researcher.paths import ACTIVE_STRATEGIES_DIR, PROJECT_ROOT
 from src.agent_researcher.state_manager import StateManager
 from src.agent_researcher.vault_reader import VaultReader
+from src.features.session import is_market_open
 
 
 class HypothesisGenerator:
@@ -58,6 +59,9 @@ def load_daily_eval_summary(max_files: int = 15) -> list[dict[str, Any]]:
             df = pd.read_parquet(path)
         except (OSError, ValueError):
             continue
+        if "timestamp" in df.columns:
+            ts = pd.to_datetime(df["timestamp"], errors="coerce")
+            df = df[ts.apply(is_market_open)]
         summary: dict[str, Any] = {
             "file": str(path.relative_to(PROJECT_ROOT)),
             "rows": int(len(df)),

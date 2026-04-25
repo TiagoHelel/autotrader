@@ -21,7 +21,11 @@ from src.features.engineering import (
     save_features,
 )
 from src.features.regime import get_current_regime
-from src.features.session import add_session_features, get_current_session_info
+from src.features.session import (
+    add_session_features,
+    get_current_session_info,
+    is_market_open,
+)
 from src.features.news_features import (
     normalize_news,
     build_news_features,
@@ -109,6 +113,15 @@ class PredictionEngine:
             "timestamp": cycle_start.isoformat(),
             "symbols": {},
         }
+
+        if not is_market_open(cycle_start):
+            logger.info(
+                "Forex fechado em %s UTC; ciclo skipado.",
+                cycle_start.isoformat(),
+            )
+            results["skipped"] = "market_closed"
+            results["elapsed_seconds"] = 0.0
+            return results
 
         # 1. Atualizar dados
         logger.info("Atualizando dados...")

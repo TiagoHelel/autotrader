@@ -43,6 +43,12 @@ command_center/backend/*.db-journal
 command_center/backend/*.db-wal
 command_center/backend/*.db-shm
 
+# Agent researcher runtime (estado, estrategias, prompts) — fonte de verdade fica em S3
+src/agent_researcher/state.json
+src/agent_researcher/strategies/active/*.json
+src/agent_researcher/strategies/rejected/*.json
+src/agent_researcher/tmp/
+
 # ML / Data
 *.h5
 *.hdf5

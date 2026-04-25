@@ -6,6 +6,21 @@ import pytest
 VALID_SIGNALS = {"BUY", "SELL", "HOLD"}
 
 
+@pytest.fixture(autouse=True)
+def _force_market_open(monkeypatch):
+    """Radar logic tests assume the Forex market is open.
+
+    The endpoint short-circuits to ``market_closed`` outside the
+    Sun 22:00 -> Fri 22:00 UTC window, so we pin the gate to True
+    for these tests. The weekend gate has its own coverage in
+    ``tests/features/test_session.py``.
+    """
+    monkeypatch.setattr(
+        "src.features.session.is_market_open",
+        lambda *args, **kwargs: True,
+    )
+
+
 def test_signal_radar(client):
     """Radar retorna payload com `signals` e 11 entries (DESIRED_SYMBOLS)."""
     res = client.get("/api/predict/signals/radar")
@@ -51,3 +66,16 @@ def test_signal_breakdown_sums(client):
     b = data["breakdown"]
     total = data.get("total", len(data["signals"]))
     assert b["BUY"] + b["SELL"] + b["HOLD"] == total
+
+
+def test_radar_returns_market_closed_when_forex_shut(client, monkeypatch):
+    """Radar short-circuits to market_closed=True outside trading hours."""
+    monkeypatch.setattr(
+        "src.features.session.is_market_open",
+        lambda *args, **kwargs: False,
+    )
+    data = client.get("/api/predict/signals/radar").json()
+    assert data["market_closed"] is True
+    assert data["signals"] == []
+    assert data["total"] == 0
+    assert data["breakdown"] == {"BUY": 0, "SELL": 0, "HOLD": 0}

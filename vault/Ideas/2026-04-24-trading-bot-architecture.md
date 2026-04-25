@@ -15,6 +15,30 @@ processos/repos separados, com faseamento 0-3 obrigatorio antes de dinheiro real
 
 Esta nota documenta a arquitetura do bot quando vier — **mas nao construir agora**.
 
+## Hard gates obrigatorios (defesa em profundidade)
+
+Quando o bot existir, **antes de qualquer ordem ser enviada** ele precisa
+passar por TODOS os gates abaixo, em sequencia. Falha em qualquer um =
+no-op silencioso, log de auditoria, sem retry agressivo.
+
+1. **`is_market_open(now_utc)`** (definido em `src/features/session.py`).
+   Forex fechado sex 22:00 UTC -> dom 22:00 UTC. Decisao [021]. Sem este
+   gate, sabado o bot tentaria abrir posicao em mercado fechado, broker
+   rejeitaria, mas sequer deve chegar la.
+2. **`session_score >= threshold`** do par (`SESSION_WEIGHTS`). Score 0
+   forca HOLD; threshold adaptativo ja existente em `decision/signal.py`.
+3. **Hipotese ativa em estrategia validada** (state.json do agent_researcher
+   ou hipotese formal `validated` em `vault/Hypotheses/`). Sem edge
+   confirmado em holdout, nao opera.
+4. **Drift monitor verde** (`drift_monitor.py` reporta `healthy` para a
+   estrategia). Se `degrading` ou `dead`, pausa ordens daquela estrategia.
+5. **Risk caps OK** (max drawdown intra-dia, posicoes simultaneas, exposicao
+   total).
+6. **Broker check** (saldo, margem, sessao do broker ativa). Redundante com
+   (1) mas e o gate fisico.
+
+Resumo: o bot **nao confia em uma camada so**. Cada gate cobre o anterior.
+
 ## Quando comecar a construir
 
 Gate explicito: H1 (confidence-gate 0.85) ou alguma hipotese equivalente

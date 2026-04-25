@@ -388,6 +388,7 @@ class TestRunCycle:
 
     def _setup_mocks(self, monkeypatch, featured_df=None):
         featured_df = featured_df if featured_df is not None else _make_featured_df()
+        monkeypatch.setattr("src.execution.engine.is_market_open", lambda ts: True)
         monkeypatch.setattr("src.execution.engine.collect_update", lambda conn, syms: {s: featured_df for s in syms})
         monkeypatch.setattr("src.execution.engine.load_raw", lambda s: featured_df)
         monkeypatch.setattr("src.execution.engine.compute_features", lambda df: df)
@@ -440,6 +441,14 @@ class TestRunCycle:
         assert result["cycle"] == 1
         assert "EURUSD" in result["symbols"]
         assert "predictions" in result["symbols"]["EURUSD"]
+
+    def test_run_cycle_skips_when_market_closed(self, fake_project, monkeypatch):
+        self._setup_mocks(monkeypatch)
+        monkeypatch.setattr("src.execution.engine.is_market_open", lambda ts: False)
+        engine = PredictionEngine(["EURUSD"])
+        result = engine.run_cycle(conn=MagicMock())
+        assert result.get("skipped") == "market_closed"
+        assert result["symbols"] == {}
 
     def test_run_cycle_catches_symbol_exception(self, fake_project, monkeypatch):
         self._setup_mocks(monkeypatch)

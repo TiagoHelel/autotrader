@@ -90,6 +90,36 @@ SESSION_FEATURE_COLUMNS = [
 
 
 # ---------------------------------------------------------------------------
+# Janela de mercado Forex
+# ---------------------------------------------------------------------------
+# Forex fecha sexta 22:00 UTC e reabre domingo 22:00 UTC.
+FOREX_CLOSE_WEEKDAY = 4   # Friday (Mon=0)
+FOREX_CLOSE_HOUR = 22
+FOREX_OPEN_WEEKDAY = 6    # Sunday
+FOREX_OPEN_HOUR = 22
+
+
+def is_market_open(timestamp) -> bool:
+    """Return True when the Forex market is open at ``timestamp`` (UTC).
+
+    The market is closed from Friday 22:00 UTC to Sunday 22:00 UTC. Anything
+    outside that weekend window is considered open.
+    """
+    if pd.isna(timestamp):
+        return False
+    ts = pd.Timestamp(timestamp)
+    weekday = ts.weekday()
+    hour = ts.hour
+    if weekday == 5:
+        return False
+    if weekday == FOREX_CLOSE_WEEKDAY and hour >= FOREX_CLOSE_HOUR:
+        return False
+    if weekday == FOREX_OPEN_WEEKDAY and hour < FOREX_OPEN_HOUR:
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Funcoes auxiliares
 # ---------------------------------------------------------------------------
 def _is_session_active(hour: int, start: int, end: int) -> bool:
@@ -151,6 +181,9 @@ def compute_session_features(timestamp, symbol: str = None) -> dict:
         session_strength, session_score
     """
     if pd.isna(timestamp):
+        return {col: 0.0 for col in SESSION_FEATURE_COLUMNS}
+
+    if not is_market_open(timestamp):
         return {col: 0.0 for col in SESSION_FEATURE_COLUMNS}
 
     ts = pd.Timestamp(timestamp)

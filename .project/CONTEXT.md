@@ -3,7 +3,7 @@
 > **This is the most important file for AI assistants. Keep it current.**
 > Update this at the start or end of every session.
 
-_Last updated: 2026-04-25 (agent_researcher OpenCode end-to-end)_
+_Last updated: 2026-04-25 (weekend gate + market_closed banner)_
 
 ---
 
@@ -16,6 +16,36 @@ equivalente) validar em holdout 30d.
 
 ## What's happening right now
 
+- **Weekend gate + UI banner (2026-04-25):**
+  - `src/features/session.py` ganhou `is_market_open(timestamp)`. Forex fecha
+    sex 22:00 UTC e reabre dom 22:00 UTC. `compute_session_features` zera todas
+    as features quando o mercado esta fechado (forca HOLD via `session_score=0`).
+  - `src/execution/engine.run_cycle` skipa o ciclo retornando
+    `{"skipped": "market_closed"}` quando esta fora do horario; sem predicao,
+    sem signal, sem log.
+  - `src/evaluation/daily_eval.run_for_date` filtra predicoes feitas com mercado
+    fechado antes de cruzar com candles. Evita `hit_t1` ruidoso na estatistica
+    que decide se H1 vai pra holdout.
+  - `src/agent_researcher/hypothesis_generator.load_daily_eval_summary` aplica
+    o mesmo filtro ao alimentar contexto pro LLM.
+  - **API `/api/predict/signals/radar`** agora retorna
+    `{"market_closed": true, "signals": [], "total": 0, ...}` quando fechado,
+    em vez de devolver sinais stale.
+  - **Frontend:** novo `MarketStatusBanner` no topo do Control Tower; SignalBoard
+    mostra "MARKET CLOSED" no corpo. Cobertura via Vitest (245 verde).
+  - Suite Python: **522 passed**. 12 testes novos cobrindo o gate.
+  - Bot real ainda nao existe (decisao [017]); quando vier, tera mais um gate
+    `is_market_open` antes de qualquer ordem (defesa em profundidade).
+- **Agent researcher: artefatos runtime ignorados em git, snapshot diario em S3 (2026-04-25):**
+  - `.gitignore` agora cobre `src/agent_researcher/state.json`,
+    `src/agent_researcher/strategies/{active,rejected}/*.json` e
+    `src/agent_researcher/tmp/`. Fonte de verdade fica no S3.
+  - `scripts/upload_to_s3.py` ganhou `upload_agent_researcher`:
+    `agent_researcher/state/state-YYYY-MM-DD.json` (snapshot diario, sem
+    overwrite — preserva tracking de holdout), `agent_researcher/strategies/{active,rejected}/<id>.json`,
+    e `agent_researcher/prompts/date=YYYY-MM-DD/<arquivo>` (audit trail completo).
+  - Tambem removemos `command_center/backend/autotrader_cc.db` do git
+    (regenerado pelo `init_db()` via `CREATE TABLE IF NOT EXISTS`).
 - **Agent researcher autonomo — integracao OpenCode end-to-end (2026-04-25):**
   - Modulo `src/agent_researcher/` agora roda end-to-end no Windows contra
     LM Studio + qwen3.5:9b hospedado em Mac mini (192.168.100.191:3032 via
