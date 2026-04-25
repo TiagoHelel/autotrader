@@ -231,7 +231,6 @@ class TestGetCandlesBulk:
         assert "GBPUSD" in result
 
     def test_error_in_one_symbol(self, conn, mt5_module):
-        from src.mt5.connection import MT5ConnectionError
         mt5_module.symbol_select.side_effect = [True, False, True]
         mt5_module.copy_rates_from_pos.return_value = np.array(
             [(1700000000, 1.1, 1.11, 1.09, 1.10, 100, 2, 0)],

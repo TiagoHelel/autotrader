@@ -3,12 +3,10 @@ Tests for src/features/session.py — session detection, vectorized add, current
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from src.features.session import (
     SESSION_FEATURE_COLUMNS,

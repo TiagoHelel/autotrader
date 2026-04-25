@@ -3,7 +3,6 @@ FastAPI router para endpoints de backtest, experimentos, ranking e model selecti
 """
 
 import logging
-from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, Query, BackgroundTasks

@@ -4,9 +4,7 @@ Converte previsoes de modelos ML em sinais actionaveis (BUY/SELL/HOLD).
 """
 
 import logging
-from datetime import datetime
 
-from config.settings import settings
 from src.utils.logging import log_decision
 
 logger = logging.getLogger(__name__)

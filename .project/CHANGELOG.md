@@ -1,5 +1,107 @@
 # Changelog
 
+## [2026-04-25] - Agent researcher: integracao OpenCode end-to-end
+
+**What changed:**
+
+- `src/agent_researcher/llm_interface.py` reescrito para o opencode CLI atual:
+  - `opencode chat --input` (inexistente) -> `opencode run --agent autotrader-researcher --model <m>` com prompt via stdin.
+  - No Windows, invoca `node <opencode-bin>` direto e pula o shim `.CMD` que mutilava `--model qwen/qwen/qwen3.5:9b`.
+  - `timeout_seconds` default `None` — qwen 9B no Mac mini precisa de minutos.
+  - `_dump_raw` salva stdout/stderr crus em `src/agent_researcher/tmp/prompts/raw_output_*.log` quando subprocess falha ou parse de JSON nao acha array.
+  - Encoding `utf-8` com `errors="replace"`.
+  - Novos env vars: `AGENT_RESEARCH_OPENCODE_AGENT`, `AGENT_RESEARCH_NODE_EXE`, `AGENT_RESEARCH_OPENCODE_SCRIPT`.
+- Agente OpenCode `autotrader-researcher` registrado em `~/.config/opencode/opencode.jsonc`:
+  - Tools allow: `read`, `list`, `glob`, `grep`, `webfetch`, `websearch`.
+  - Tools deny: `write`, `edit`, `patch`, `bash`, `todowrite`, `todoread`.
+  - System prompt obriga emissao de JSON puro como resposta final.
+- `OpenCodeClient(model="qwen")` hardcoded em `orchestrator.py` removido — usa default `qwen/qwen/qwen3.5:9b`.
+- Bumps moderados de contexto (cabem em 100k):
+  - `vault_reader.load_context`: 20->50 arquivos por categoria, snippet 4 KB -> 8 KB.
+  - `hypothesis_generator.load_daily_eval_summary`: 5->15 arquivos, breakdowns por symbol/trend/volatility_regime/hour_utc.
+  - `hypothesis_generator.load_filter_log_summary`: 50->200 linhas.
+- Prompt instrui explicitamente uso da janela de 100k e cross-reference de learnings/filter_log antes de propor.
+
+**Why:**
+- O codigo herdado nunca rodou end-to-end no host real. Tres problemas sobrepostos: API errada do CLI, shim Windows mutilando args, e default agent do opencode (build) tentando editar codigo via Edit/Bash. Node-direto + agente custom restrito resolve os tres sem afrouxar a fronteira de escrita do orchestrator Python.
+
+**End-to-end run:**
+- Hipotese gerada: confidence>=0.75 + Tokyo session + signal=1.
+- Verdict research: REJECTED_N (n=0 — dataset insuficiente).
+- Holdout NAO consumido (correto).
+- `pytest -q`: **511 passed, 2 warnings** (warnings pre-existentes).
+
+---
+
+## [2026-04-25] - Agent researcher autonomo com OpenCode
+
+**What changed:**
+
+- Novo modulo `src/agent_researcher/`:
+  - `orchestrator.py` coordena ciclo load context -> OpenCode -> research split
+    -> holdout once -> strategy persistence -> vault learnings -> drift monitor.
+  - `llm_interface.py` usa somente OpenCode CLI com modelo `qwen` e prompt file
+    local ao agente.
+  - `evaluator.py` reutiliza `src.research.conditional_analysis.evaluate_filter`
+    com `log=False`, mantendo o agente sem escrita em `data/**`.
+  - `state_manager.py` controla filtros testados, holdouts usados, estrategias
+    ativas e historico de drift em `src/agent_researcher/state.json`.
+  - `strategy_manager.py` persiste estrategias validadas em
+    `src/agent_researcher/strategies/active/` e move estrategias mortas para
+    `strategies/rejected/`.
+  - `vault_reader.py`/`vault_writer.py` leem contexto e escrevem somente em
+    `vault/AgentResearch/`.
+- Novo wrapper `scripts/run_agent_researcher.py`.
+- `scripts/scheduler.py` agora agenda o agente as **03:00 UTC**, apos upload
+  (01:00 UTC) e daily_eval (02:00 UTC).
+- Novo vault area: `vault/AgentResearch/`.
+- Testes novos em `tests/agent_researcher/`.
+
+**Why:**
+- Automatizar a camada LLM de geracao de hipoteses sem quebrar disciplina de
+  holdout, Bonferroni awareness e isolamento de escrita.
+
+**Validation:**
+- Testes focados adicionados para parsing do OpenCode, state/holdout, evaluator,
+  strategy persistence e drift monitor.
+
+---
+
+## [2026-04-25] - Ruff config + lint cleanup + overfit warning operacional
+
+**What changed:**
+
+- **`pyproject.toml`** ganhou configuracao de `ruff`:
+  - `[tool.ruff] line-length = 88`
+  - `[tool.ruff.lint] per-file-ignores = { "command_center/backend/main.py" = ["E402"] }`
+- **Lint cleanup concluido** nos pontos que ainda estavam pendentes:
+  - imports mortos removidos em arquivos do `command_center`
+  - imports reorganizados em `src/api/predictions.py`
+  - mocks com `;` quebrados em `tests/execution/test_engine.py`
+  - import tardio removido em `tests/execution/test_loop.py`
+- **`src/execution/engine.py`** agora resume o overfitting por modelo no ciclo de CPCV:
+  - calcula `avg_overfit_gap` a partir de `fold_details`
+  - adiciona `overfit_warning` ao `cpcv_result`
+  - emite `logger.warning(...)` e `log_decision("overfit_warning_<model>")` quando a media passa de `OVERFIT_THRESHOLD`
+  - comportamento de treino/selecionador permanece igual; mudanca e de observabilidade
+- **`tests/execution/test_engine.py`** expandido para cobrir:
+  - resumo `avg_overfit_gap`
+  - caso sem warning
+  - caso com warning + `log_decision`
+
+**Why:**
+- O `gap` de overfitting ja era calculado e persistido, mas no engine servia so para log descartado.
+- O projeto ja tinha limpeza de lint em andamento; faltava consolidar a configuracao do `ruff` no `pyproject.toml` e fechar os restos seguros.
+
+**Validation:**
+- `ruff check .` â€” OK
+- `python -m pytest tests\\execution\\test_engine.py tests\\execution\\test_loop.py tests\\evaluation\\test_overfitting.py tests\\evaluation\\test_cpcv.py -q` â€” **78 passed**
+
+**Files:**
+- Modified: `pyproject.toml`, `src/execution/engine.py`, `src/api/predictions.py`, `command_center/backend/{database,main,ws_manager}.py`, `tests/execution/{test_engine,test_loop}.py`, `.project/{CONTEXT,CHANGELOG}.md`
+
+---
+
 ## [2026-04-25] - Scheduler in-process + wrapper agendavel do daily_eval
 
 **What changed:**

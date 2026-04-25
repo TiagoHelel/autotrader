@@ -21,6 +21,7 @@ de modelo, e ideias de melhorias.
 | `Postmortems/` | Quando algo regrediu (modelo, estrategia, sistema). O que aconteceu, por que, o que mudar. |
 | `Ideas/` | Backlog de ideias soltas. Vira hipotese ou research quando amadurece. |
 | `Templates/` | Templates do Obsidian. Configure em Settings > Templates > Template folder location = `Templates`. |
+| `AgentResearch/` | Notas geradas pelo agente autonomo (`src/agent_researcher`): hipoteses, logs e learnings. |
 
 ---
 
@@ -71,3 +72,9 @@ Quando uma hipotese vira teste no `conditional_analysis`, a nota deve registrar:
 - Verdict resultante (REJECTED_N / UNDERPOWERED / WEAK / PROMISING / STRONG)
 
 Assim a nota Obsidian e o `filter_log.parquet` ficam linkados — graph teorico + log empirico.
+
+## Agent Researcher
+
+O agente autonomo de pesquisa escreve apenas em `vault/AgentResearch/**`.
+Ele pode ler `vault/Hypotheses/` e os learnings anteriores para melhorar novas
+hipoteses, mas nao altera notas fora da area dele em runtime.

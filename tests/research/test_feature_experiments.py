@@ -13,8 +13,6 @@ import pytest
 from config.settings import settings
 from src.research.feature_experiments import (
     FEATURE_SETS,
-    EXPERIMENT_CONFIGS,
-    DEFAULT_SPREADS,
     _get_feature_columns,
     _experiment_id,
     _prepare_filtered_dataset,

@@ -1,0 +1,20 @@
+{
+  "active_strategy_ids": [],
+  "drift_history": {},
+  "last_run_at": "2026-04-25T21:35:47.555768+00:00",
+  "tested_filter_hashes": {
+    "e84fbf339819": {
+      "filters": {
+        "confidence_min": 0.75,
+        "session": [
+          "tokyo",
+          "tokyo,london"
+        ],
+        "signal": 1
+      },
+      "timestamp": "2026-04-25T21:35:47.544450+00:00",
+      "verdict": "REJECTED_N"
+    }
+  },
+  "used_holdouts": {}
+}

@@ -6,22 +6,13 @@ Treina, avalia e roda backtest para cada combinacao.
 
 import logging
 import hashlib
-import json
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
 
 from config.settings import settings
-from src.features.engineering import (
-    FEATURE_COLUMNS,
-    NEWS_FEATURE_COLUMNS,
-    compute_features,
-    prepare_dataset,
-)
-from src.features.regime import compute_market_regime
 from src.models.registry import create_all_models
-from src.backtest.engine import run_backtest, _compute_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +105,6 @@ def run_feature_experiments(
         return cached
 
     featured_df = pd.read_parquet(features_file)
-    price_df = pd.read_parquet(raw_file)
 
     results = []
 

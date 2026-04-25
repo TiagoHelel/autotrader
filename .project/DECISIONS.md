@@ -4,6 +4,64 @@
 
 ---
 
+### [020] - Agent OpenCode customizado com tools restritos
+
+- **Date:** 2026-04-25
+- **Status:** implemented
+- **Decision:** A chamada LLM do `agent_researcher` roda atraves de um agente
+  OpenCode dedicado `autotrader-researcher`, registrado em
+  `~/.config/opencode/opencode.jsonc`, com tools allow somente `read`, `list`,
+  `glob`, `grep`, `webfetch`, `websearch`. `write`, `edit`, `patch`, `bash`
+  ficam explicitamente desligados.
+- **Implementation:**
+  - O agente le repo e web, nao escreve nada.
+  - Toda escrita real continua sendo do orchestrator Python
+    (`vault_writer.py`, `strategy_manager.py`, `state_manager.py`), que segue
+    a fronteira definida em [019].
+  - Em runtime no Windows, `OpenCodeClient` chama `node` direto com
+    `node_modules/opencode-ai/bin/opencode`, pulando o shim `.CMD` que
+    mutilava `--model`. Prompt entregue via stdin.
+- **Reasoning:**
+  - `opencode run` e um agente, nao endpoint de completion. Sem agente custom
+    o default `build` tem Edit/Bash e tenta editar o proprio codigo do projeto
+    durante a "geracao de hipoteses".
+  - Manter `webfetch`/`websearch` enriquece o raciocinio do agente sem dar
+    nenhuma capacidade de escrita, mantendo a fronteira [019] intacta
+    independente do prompt.
+- **Consequences:**
+  - Config do agente vive no home do usuario, fora do repo. Setup precisa ser
+    documentado.
+  - Se opencode mudar a API de tools, o registro precisa ser revalidado;
+    falha rapida via stderr capturado em raw_output_*.log.
+
+---
+
+### [019] - Agent researcher isolado com escrita propria
+
+- **Date:** 2026-04-25
+- **Status:** implemented
+- **Decision:** O agente autonomo de pesquisa vive em `src/agent_researcher/` e
+  pode ler o repositorio inteiro, mas em runtime so escreve em
+  `src/agent_researcher/**` e `vault/AgentResearch/**`.
+- **Implementation:**
+  - LLM via OpenCode CLI (`opencode chat --model qwen --input <prompt_file>`),
+    sem SDK Python.
+  - Prompt files, estado, estrategias ativas/rejeitadas e tracking de holdout
+    ficam dentro de `src/agent_researcher/`.
+  - Notas Obsidian geradas ficam em `vault/AgentResearch/{hypotheses,logs,learnings}/`.
+  - `conditional_analysis.evaluate_filter` e reutilizado com `log=False`, para
+    impedir escrita em `data/research/` pelo agente.
+  - Scheduler roda o agente as 03:00 UTC, apos upload (01:00 UTC) e daily_eval
+    (02:00 UTC).
+- **Reasoning:** O agente automatiza pesquisa, mas nao pode contaminar dados,
+  logs estatisticos globais ou notas humanas fora da area dele. A fronteira de
+  escrita torna falhas reversiveis e auditaveis.
+- **Consequences:** Holdout protection do agente e propria (`state.json`).
+  O `filter_log.parquet` existente continua sendo contexto read-only para
+  Bonferroni awareness, nao destino de escrita.
+
+---
+
 ### [018] — Avaliador batch diario (camada 1) com auto-execucao de hipoteses
 
 - **Date:** 2026-04-24

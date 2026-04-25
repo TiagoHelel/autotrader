@@ -1,0 +1,179 @@
+You are a senior quant researcher. Generate at most 1
+new conditional trading hypotheses for the AutoTrader research system.
+
+You have access to a 100k token context window. Use it: read the full
+context payload below carefully (vault notes, daily_eval breakdowns,
+filter_log of past tests, active strategies, prior failures) before
+proposing anything. Cross-reference recent learnings and avoid filters
+that already failed in tested_filters or filter_log.
+
+Hard rules:
+- Return ONLY valid JSON, no prose and no markdown fences.
+- Output must be a JSON array.
+- Each item must contain: hypothesis, filters, reasoning, expected_behavior.
+- Use causal reasoning, not brute-force pattern matching.
+- Prefer interpretable filters supported by conditional_analysis:
+  symbol, model, hour_utc, session, signal, trend, volatility_regime,
+  confidence, confidence_min, session_score.
+- Avoid any filter already tested or described as failed.
+- Minimum expected sample size must be at least 30 trades.
+- Be Bonferroni-aware: propose few, high-conviction hypotheses.
+- Do not use future information or daily_eval outcomes as proof.
+
+Context:
+{
+  "active_strategies": [],
+  "daily_eval": [
+    {
+      "file": "data\\research\\eval_today_2026-04-24.parquet",
+      "hit_t1_by_model": {
+        "ema_heuristic": 0.4041,
+        "linear_regression": 0.5464,
+        "naive": 0.0,
+        "random_forest": 0.6504,
+        "xgboost": 0.5982
+      },
+      "hit_t1_by_session": {
+        "london": 0.4298,
+        "london,new_york": 0.3926,
+        "new_york": 0.4138,
+        "sydney": 0.4655,
+        "sydney,tokyo": 0.4647,
+        "tokyo": 0.5,
+        "tokyo,london": 0.5182
+      },
+      "hit_t1_by_symbol": {
+        "AUDUSD": {
+          "mean": 0.4237,
+          "n": 1390
+        },
+        "EURGBP": {
+          "mean": 0.4748,
+          "n": 1390
+        },
+        "EURJPY": {
+          "mean": 0.3914,
+          "n": 1390
+        },
+        "EURUSD": {
+          "mean": 0.4669,
+          "n": 1390
+        },
+        "GBPJPY": {
+          "mean": 0.4424,
+          "n": 1390
+        },
+        "GBPUSD": {
+          "mean": 0.4813,
+          "n": 1390
+        },
+        "NZDUSD": {
+          "mean": 0.4302,
+          "n": 1390
+        },
+        "USDCAD": {
+          "mean": 0.4619,
+          "n": 1390
+        },
+        "USDCHF": {
+          "mean": 0.4547,
+          "n": 1390
+        },
+        "USDJPY": {
+          "mean": 0.4432,
+          "n": 1390
+        },
+        "XAUUSD": {
+          "mean": 0.3651,
+          "n": 1345
+        }
+      },
+      "rows": 15245
+    },
+    {
+      "file": "data\\research\\eval_2026-04-24.parquet",
+      "hit_t1_by_model": {
+        "ema_heuristic": 0.4343,
+        "linear_regression": 0.5347,
+        "naive": 0.0,
+        "random_forest": 0.6721,
+        "xgboost": 0.5769
+      },
+      "hit_t1_by_session": {
+        "london": 0.4298,
+        "london,new_york": 0.3926,
+        "new_york": 0.3727,
+        "sydney": 0.4679,
+        "sydney,tokyo": 0.4647,
+        "tokyo": 0.5,
+        "tokyo,london": 0.5182
+      },
+      "hit_t1_by_symbol": {
+        "AUDUSD": {
+          "mean": 0.4271,
+          "n": 1145
+        },
+        "EURGBP": {
+          "mean": 0.4638,
+          "n": 1145
+        },
+        "EURJPY": {
+          "mean": 0.4096,
+          "n": 1145
+        },
+        "EURUSD": {
+          "mean": 0.4638,
+          "n": 1145
+        },
+        "GBPJPY": {
+          "mean": 0.4402,
+          "n": 1145
+        },
+        "GBPUSD": {
+          "mean": 0.4594,
+          "n": 1145
+        },
+        "NZDUSD": {
+          "mean": 0.4576,
+          "n": 1145
+        },
+        "USDCAD": {
+          "mean": 0.4725,
+          "n": 1145
+        },
+        "USDCHF": {
+          "mean": 0.4576,
+          "n": 1145
+        },
+        "USDJPY": {
+          "mean": 0.441,
+          "n": 1145
+        },
+        "XAUUSD": {
+          "mean": 0.3845,
+          "n": 1100
+        }
+      },
+      "rows": 12550
+    }
+  ],
+  "filter_log": [],
+  "tested_filters": {},
+  "used_holdouts": {},
+  "vault": {
+    "agent_hypotheses": [],
+    "agent_learnings": [],
+    "legacy_hypotheses": [
+      {
+        "path": "Hypotheses\\2026-04-24-remover-ema-heuristic.md",
+        "snippet": "---\ntype: hypothesis\ncreated: 2026-04-24\nstatus: draft\ntags: [hipotese, ensemble, model-pruning]\nfilter_hash: \nverdict: \n---\n\n# H4 - Remover ema_heuristic do ensemble melhora PnL\n\n## Hipotese\n\n> `ema_heuristic` tem PnL liquido < 0 e winrate < 50% em janela 30 dias\n> quando age via signal engine. Remove-lo do ensemble (ou do voting) melhora\n> PnL agregado da estrategia em pelo menos 2 bps por trade.\n\n## Por que faz sentido (pre-teste)\n\n- **Mecanismo:** ema_heuristic usa regra fixa (EMA50 vs EMA200 + momentum).\n  Eh um modelo que **nao aprende** \u2014 diferente de RF/XGB que reagem a\n  mudanca de regime. Em mercado moderno com noise alto e regime shifts,\n  regras fixas tendem a degradar.\n- **Evidencia preliminar (2026-04-24):**\n  - hit_t1 = 40.6% (pior que coinflip)\n  - PnL = **-15.7 bps**, winrate 40% em 100 trades BUY/SELL\n  - Pior performer entre os 4 modelos direcionais\n- **Por que esta no ensemble:** historico \u2014 era util como baseline interpretavel.\n  Mas se contamina o ensemble com sinal contrario ao consenso de RF/XGB,\n  pode estar puxando o ensemble pro errado em momentos onde os modelos\n  fortes concordam.\n\n## Falsificadores conscientes\n\n- **1 dia de dados nao prova nada.** Ema_heuristic pode brilhar em regimes\n  trending fortes que hoje nao apareceram.\n- **Pode ter funcao de \"diversificacao\":** mesmo errando mais, talvez erre em\n  momentos diferentes dos demais \u2014 entao remover aumenta correlacao do\n  ensemble e piora variance.\n- **O ensemble atual ja eh media simples** \u2014 verificar se o impacto e grande\n  o suficiente pra justificar mudanca.\n\n## Plano de teste\n\n1. **Baseline:** rodar `evaluate_filter` com ensemble atual (5 modelos) em 30d.\n2. **Counterfactual:** computar ensemble sem ema_heuristic (4 modelos) na\n   mesma janela.\n3. **Comparar:**\n   - Hit rate ensemble com vs sem\n   - PnL liquido com spread\n   - Maximum drawdown\n   - Sharpe ratio\n\n```python\n# Pseudocodigo\ndf_research = load_predictions_30d()\nensemble_5 = df_research.groupby(\"timestamp\")[\"pred_t1\"].mean()\nensemble_4 = df_research[df_research[\"model\"] != \"ema_heuristic\"].groupby(\"timestamp\")[\"pred_t1\"].mean()\n```\n\n## Criterio de sucesso\n\n- PnL ensemble_4 > PnL ensemble_5 em **pelo menos 2 bps/trade**\n- Sharpe nao piora (proxy de variance nao explodiu)\n- Drawdown nao piora\n\nSe passar: PR removendo ema_heuristic do ensemble (mantendo no codigo pra\ncasos individuais ou regime trending forte).\n\n---\n\n## Resultado (preencher APOS rodar)\n\n- `filter_hash`:\n- PnL ensemble com 5 modelos:\n- PnL ensemble sem ema_heuristic:\n- Delta:\n- Sharpe delta:\n- DD delta:\n- Verdict:\n\n## Conclusao / proximos passos\n\n-\n\n## Links\n\n- Research base: [[../Research/2026-04-24-eval-diaria-baseline]]\n- Codigo do ensemble: `src/models/ensemble.py`\n",
+        "title": "2026-04-24-remover-ema-heuristic"
+      },
+      {
+        "path": "Hypotheses\\2026-04-24-confidence-gate-085.md",
+        "snippet": "---\ntype: hypothesis\ncreated: 2026-04-24\nstatus: draft\ntags: [hipotese, confidence-gate, edge-discovery]\nfilter_hash: \nverdict: \nfilters:\n  confidence_min: 0.85\n---\n\n# H1 - Confidence >= 0.85 como gate universal de qualidade\n\n## Hipotese\n\n> Predicoes com `confidence >= 0.85` (qualquer modelo, qualquer simbolo)\n> tem `hit_t1 >= 58%` em janela 30 dias, com delta vs coinflip > 5pp e\n> p-value < 0.01 apos correcao Bonferroni.\n\n## Por que faz sentido (pre-teste)\n\n- **Mecanismo:** confidence no signal engine eh derivada de magnitude do\n  expected return + concordancia entre modelos. Alto confidence implica\n  predicoes consistentes entre random_forest, xgboost e linear \u2014 logo o\n  sinal tem mais chance de refletir estrutura real do mercado, nao ruido.\n- **Evidencia preliminar (2026-04-24):** gradiente forte e monotono nos\n  bins de confidence:\n  - <0.3: 46.8% (n=1343)\n  - 0.5-0.7: 45.8% (n=2430)\n  - 0.7-0.85: 53.5% (n=2930)\n  - **0.85+: 64.5% (n=4910)**\n  Delta de **17.7pp** entre o bin mais baixo e o mais alto.\n- **Diferenca para coin flip:** se sustentar, eh edge agnostico a sym/sessao \u2014\n  vira gate plug-and-play em qualquer estrategia downstream.\n\n## Filtro proposto\n\n```python\nfilters = {\n    \"confidence_min\": 0.85,\n}\n```\n\nSem outras restricoes. Quero testar se o gate sozinho carrega edge.\n\n## Plano\n\n- **Dataset:** `data/research/predictions_*.parquet` cobrindo >= 30 dias\n  com schema enriquecido. **Nao temos isso ainda** \u2014 schema `confidence` so\n  comecou a ser gravado em 2026-04-23. Plano: aguardar 30 dias de coleta OU\n  reconstruir confidence retroativamente a partir das predicoes antigas\n  (recalcular dispersao entre modelos no momento da predicao).\n- **Split:** `holdout_pct=0.20, method=\"temporal\"` (ultimos 20% do dataset).\n- **N esperado:** ~30k+ amostras com `confidence >= 0.85` (extrapolando hoje).\n- **Criterio de sucesso:**\n  - hit_t1 >= 58% (vs ~50% coinflip, vs ~46% baseline confidence baixo)\n  - p-value binomial < 0.01\n  - p-value Bonferroni < 0.05 (estimar quantos testes serao feitos no log)\n  - PnL liquido positivo apos custo de spread (~1-2 bps por par)\n\n## Riscos / falsificadores\n\n- **Confidence pode ser overfit ao regime atual.** Se 30d de dados nao gerar\n  o mesmo gradiente, a metrica eh ruido.\n- **Spread pode comer todo o edge.** 64% hit em direcao M5 pode virar 50%\n  PnL apos spread de 1.5 bps em pares menores.\n- **Selection bias.** Confidence alto talvez correlacione com horarios de\n  baixa volatilidade onde direcao eh mais previsivel mas movimento pequeno\n  \u2014 gate filtra movimento > custo.\n\n---\n\n## Resultado (preencher APOS rodar)\n\n- `filter_hash`:\n- N:\n- hit_t1:\n- CI95:\n- p-value:\n- Bonferroni ajustado:\n- PnL bruto (bps):\n- PnL liquido apos spread:\n- Verdict:\n\n## Validacao no holdout\n\n- Data:\n- N holdout:\n- hit_t1 holdout:\n- Decisao:\n\n## Conclusao / proximos passos\n\n-\n\n## Links\n\n- Research base: [[../Research/2026-04-24-eval-diaria-baseline]]\n- Modulo: [[../../src/research/conditional_analysis]] (mencionado em CHANGELOG.md)\n\n## Daily eval log (auto)\n\n- 2026-04-24: n=3946 | hit_t1=0.6358 | CI95=[0.6207, 0.6507] | verdict=PROMISING\n",
+        "title": "2026-04-24-confidence-gate-085"
+      }
+    ]
+  }
+}
