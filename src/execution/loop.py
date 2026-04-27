@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timedelta
 
 from config.settings import settings
-from src.mt5.connection import MT5Connection
+from src.mt5 import get_mt5_connection
 from src.data.collector import validate_symbols
 from src.execution.engine import PredictionEngine
 from src.data.news.investing import run_news_ingestion
@@ -85,7 +85,7 @@ def run_forever():
     logger.info("AutoTrader Prediction System - INICIANDO")
     logger.info("=" * 60)
 
-    with MT5Connection() as conn:
+    with get_mt5_connection() as conn:
         # Valida simbolos
         symbols = validate_symbols(conn)
         logger.info(f"Simbolos ativos: {symbols}")

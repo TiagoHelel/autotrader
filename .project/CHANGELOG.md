@@ -1,5 +1,41 @@
 # Changelog
 
+## [2026-04-26] - MT5 HTTP pull bridge (passo 1 do desacoplamento)
+
+**What changed:**
+
+- Nova pasta `mt5_api/` na raiz com FastAPI fino que expoe `MT5Connection`
+  via pull HTTP. Endpoints: `/health`, `/account`, `/terminal`, `/symbols`,
+  `/symbols/{s}`, `/symbols/{s}/tick`, `/candles/{s}` (suporta `count` ou
+  `date_from`/`date_to`).
+- Lifespan abre/fecha conexao MT5; `threading.Lock` global protege a lib
+  `MetaTrader5` (nao eh thread-safe).
+- Auth opcional via env `MT5_API_TOKEN` (Bearer). Porta default `8002`
+  (`MT5_API_PORT`), host `0.0.0.0`.
+- `startup.bat` agora sobe `python -m mt5_api.main` ao lado dos demais
+  servicos.
+
+**Why:**
+- Primeiro passo para mover o stack principal pra Linux. Hoje qualquer
+  consumidor de candles/tick precisa importar `MetaTrader5`
+  (Windows-only). Servidor fica na maquina com terminal MT5; resto do
+  sistema (ML, LLM, news, command_center) vai poder rodar Linux
+  consumindo HTTP. Pull (nao webhook) porque backtest/research precisam
+  de range historico arbitrario e recovery pos-queda fica trivial.
+
+**Update (mesma data) — passo 2 fechado:**
+- `src/mt5/remote_client.py:MT5RemoteClient` (httpx, mesma interface do
+  `MT5Connection`).
+- `src/mt5/__init__.py` ganhou factory `get_mt5_connection()` chaveada
+  por `settings.mt5.backend` ("local"/"remote"). `config/settings.py`
+  ganhou `MT5Config.backend/api_url/api_token` com defaults sensatos.
+- `src/execution/loop.py` agora usa a factory. Default "local"
+  preserva o comportamento anterior bit-a-bit.
+- E2E validado contra a API rodando em `localhost:8002`: account,
+  symbols, candles e tick OK. Suite `tests/mt5/` 25/25 verde.
+
+---
+
 ## [2026-04-25] - Weekend gate + market-closed banner
 
 **What changed:**
