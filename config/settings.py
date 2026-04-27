@@ -20,6 +20,16 @@ class MT5Config:
     password_read: str = field(default_factory=lambda: os.getenv("MT5_PASSWORD_READ", ""))
     server: str = field(default_factory=lambda: os.getenv("MT5_SERVER", ""))
 
+    # HTTP bridge (mt5_api). Quando `backend == "remote"`, o sistema consome
+    # candles/tick/account via essa URL em vez de importar `MetaTrader5`.
+    backend: str = field(
+        default_factory=lambda: os.getenv("MT5_BACKEND", "local").lower()
+    )
+    api_url: str = field(
+        default_factory=lambda: os.getenv("MT5_API_URL", "http://localhost:8002")
+    )
+    api_token: str = field(default_factory=lambda: os.getenv("MT5_API_TOKEN", ""))
+
 
 @dataclass
 class S3Config:

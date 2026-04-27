@@ -4,6 +4,39 @@
 
 ---
 
+### [022] - MT5 acessado via HTTP pull (nao webhook/push)
+
+- **Date:** 2026-04-26
+- **Status:** implemented (passo 1: servidor)
+- **Decision:** Para mover o stack principal pra Linux mantendo o
+  terminal MT5 em Windows, expor `MT5Connection` atraves de um servidor
+  FastAPI fino (`mt5_api/`) com **pull HTTP**. Outras maquinas (Linux)
+  vao consumir `/candles`, `/tick`, `/account` por requisicao, em vez
+  de receber webhook/push.
+- **Reasoning:**
+  - **Backtest e research** precisam de range historico arbitrario
+    (`copy_rates_range`) sob demanda. Webhook so cobre tempo real.
+  - **Recovery pos-queda** vira trivial: o cliente pede o range que
+    perdeu. Com push voce perde silenciosamente.
+  - Acoplamento atual ja eh baixo: so `MT5Connection` (e seu
+    consumidor `collect_*` + `engine.run_cycle`) toca a lib
+    `MetaTrader5`. Trocar para um cliente HTTP com a mesma interface
+    eh construtor-only.
+  - Push (Redis pub/sub ou WebSocket) pode ser adicionado *depois*
+    como otimizacao — a base pull cobre 100% dos casos hoje.
+- **Consequences:**
+  - Latencia LAN (~1ms) eh irrelevante para M1/M5; em VPS separados
+    medir antes.
+  - Auth obrigatoria quando expor fora de LAN: VPN
+    (Tailscale/WireGuard) + Bearer token (`MT5_API_TOKEN`).
+  - Quando entrar execucao, `POST /order` precisa de `client_id`
+    idempotente para evitar trade duplicado em retry de rede.
+  - A lib `MetaTrader5` **nao eh thread-safe** -> servidor usa lock
+    global. Nao escala horizontalmente em uma so instancia, mas o
+    terminal MT5 ja eh single-process por natureza.
+
+---
+
 ### [021] - Weekend gate em camadas (engine + eval + API + UI)
 
 - **Date:** 2026-04-25

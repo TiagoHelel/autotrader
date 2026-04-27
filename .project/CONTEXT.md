@@ -3,7 +3,7 @@
 > **This is the most important file for AI assistants. Keep it current.**
 > Update this at the start or end of every session.
 
-_Last updated: 2026-04-25 (weekend gate + market_closed banner)_
+_Last updated: 2026-04-26 (mt5_api pull bridge — passo 1 do desacoplamento)_
 
 ---
 
@@ -16,6 +16,26 @@ equivalente) validar em holdout 30d.
 
 ## What's happening right now
 
+- **MT5 HTTP pull bridge (2026-04-26) — desacoplamento completo (read-only):**
+  - Servidor `mt5_api/` (FastAPI) expondo `MT5Connection` via pull HTTP
+    (porta default 8002). Endpoints: `/health`, `/account`, `/terminal`,
+    `/symbols`, `/symbols/{s}`, `/symbols/{s}/tick`, `/candles/{s}`
+    (count ou date_from/date_to). Lifespan + `threading.Lock` (lib MT5
+    nao eh thread-safe). Auth opcional `MT5_API_TOKEN`.
+  - Cliente `src/mt5/remote_client.py:MT5RemoteClient` com a mesma
+    interface do `MT5Connection`. Usa `httpx.Client` com base_url +
+    Bearer; `/health` validado no `connect()`.
+  - Factory `src/mt5/__init__.py:get_mt5_connection()` escolhe local
+    ou remote por `settings.mt5.backend` (env `MT5_BACKEND`).
+  - `src/execution/loop.py` agora usa a factory. Default `local`
+    mantem comportamento identico ao anterior.
+  - **Validado E2E** com API real em `localhost:8002`: account, symbols,
+    candles e tick retornam dados corretos do terminal. `tests/mt5/`
+    25/25 verde.
+  - Para portar pra Linux: setar no `.env` `MT5_BACKEND=remote` +
+    `MT5_API_URL=http://<ip-windows>:8002` + token opcional.
+  - **Sem execucao de ordens** ainda (read-only). Quando vier, sera
+    `POST /order` com `client_id` para idempotencia.
 - **Weekend gate + UI banner (2026-04-25):**
   - `src/features/session.py` ganhou `is_market_open(timestamp)`. Forex fecha
     sex 22:00 UTC e reabre dom 22:00 UTC. `compute_session_features` zera todas
