@@ -46,6 +46,7 @@ python-dotenv==1.2.2
 pytz==2026.1.post1
 PyYAML==6.0.3
 rich==15.0.0
+ruff==0.15.12
 s3transfer==0.16.1
 schedule==1.2.2
 scikit-learn==1.7.2
