@@ -492,9 +492,15 @@ def _apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
         if out.empty:
             return out
         if key == "symbol":
-            out = out[out["symbol"] == val]
+            if isinstance(val, (list, tuple, set)):
+                out = out[out["symbol"].isin(list(val))]
+            else:
+                out = out[out["symbol"] == val]
         elif key == "model":
-            out = out[out["model"] == val]
+            if isinstance(val, (list, tuple, set)):
+                out = out[out["model"].isin(list(val))]
+            else:
+                out = out[out["model"] == val]
         elif key == "hour_utc":
             lo, hi = val
             out = out[(out["hour_utc"] >= lo) & (out["hour_utc"] < hi)]
@@ -509,9 +515,15 @@ def _apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
             else:
                 out = out[out["signal"] == val]
         elif key == "trend":
-            out = out[out["trend"] == val]
+            if isinstance(val, (list, tuple, set)):
+                out = out[out["trend"].isin(list(val))]
+            else:
+                out = out[out["trend"] == val]
         elif key == "volatility_regime":
-            out = out[out["volatility_regime"] == val]
+            if isinstance(val, (list, tuple, set)):
+                out = out[out["volatility_regime"].isin(list(val))]
+            else:
+                out = out[out["volatility_regime"] == val]
         elif key == "confidence":
             lo, hi = val
             out = out[(out["confidence"] >= lo) & (out["confidence"] <= hi)]
