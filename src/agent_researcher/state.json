@@ -1,8 +1,56 @@
 {
   "active_strategy_ids": [],
   "drift_history": {},
-  "last_run_at": "2026-04-26T03:20:02.286230+00:00",
+  "last_run_at": "2026-04-28T03:13:26.485708+00:00",
   "tested_filter_hashes": {
+    "02c35ec34add": {
+      "filters": {
+        "confidence_min": 0.7,
+        "model": "random_forest",
+        "session": [
+          "london"
+        ],
+        "signal": 1,
+        "symbol": [
+          "EURUSD",
+          "GBPUSD"
+        ]
+      },
+      "timestamp": "2026-04-28T03:13:26.424355+00:00",
+      "verdict": "REJECTED_N"
+    },
+    "2e7abcd50b0a": {
+      "filters": {
+        "confidence_min": 0.7,
+        "model": "random_forest",
+        "session": [
+          "london"
+        ],
+        "signal": 1,
+        "symbol": [
+          "EURJPY",
+          "GBPJPY"
+        ]
+      },
+      "timestamp": "2026-04-27T03:03:43.983775+00:00",
+      "verdict": "REJECTED_N"
+    },
+    "332e319a0a01": {
+      "filters": {
+        "confidence_min": 0.6,
+        "model": "random_forest",
+        "session": [
+          "london"
+        ],
+        "signal": 1,
+        "symbol": [
+          "NZDUSD",
+          "AUDUSD"
+        ]
+      },
+      "timestamp": "2026-04-27T03:03:44.015234+00:00",
+      "verdict": "REJECTED_N"
+    },
     "70b73c88d8f1": {
       "filters": {
         "confidence_min": 0.6,
@@ -44,6 +92,22 @@
         "signal": 1
       },
       "timestamp": "2026-04-26T03:02:53.171502+00:00",
+      "verdict": "REJECTED_N"
+    },
+    "e5267b6a726d": {
+      "filters": {
+        "confidence_min": 0.7,
+        "model": "xgboost",
+        "session": [
+          "tokyo"
+        ],
+        "signal": 1,
+        "symbol": [
+          "USDJPY",
+          "EURJPY"
+        ]
+      },
+      "timestamp": "2026-04-27T03:03:44.050253+00:00",
       "verdict": "REJECTED_N"
     },
     "e84fbf339819": {

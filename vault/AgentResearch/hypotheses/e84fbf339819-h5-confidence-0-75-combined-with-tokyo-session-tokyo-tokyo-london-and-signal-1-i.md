@@ -28,3 +28,10 @@ From daily_eval data: Tokyo sessions show highest baseline hit rates (tokyo=0.50
 ## Expected behavior
 
 hit_t1 >= 62% (vs ~50-53% baseline), p-value < 0.01 Bonferroni-adjusted, PnL > 1 bps/trade after spread costs
+
+## Related
+
+- Learning: [[learnings/e84fbf339819-h5-confidence-0-75-combined-with-tokyo-session-tokyo-tokyo-london-and-signal-1-i]]
+- Experiment log: [[logs/e84fbf339819-h5-confidence-0-75-combined-with-tokyo-session-tokyo-tokyo-london-and-signal-1-i]]
+- Folder: [[AgentResearch/hypotheses/_index|hypotheses]]
+- Area: [[AgentResearch/README|AgentResearch]]

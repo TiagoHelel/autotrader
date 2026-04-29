@@ -10,8 +10,10 @@ from pathlib import Path
 from src.agent_researcher.drift_monitor import DriftMonitor
 from src.agent_researcher.evaluator import EvaluationError, Evaluator
 from src.agent_researcher.hypothesis_generator import HypothesisGenerator
+from src.agent_researcher.hpo_context import load_hpo_summary
 from src.agent_researcher.llm_interface import LLMCallError, OpenCodeClient
 from src.agent_researcher.paths import ensure_agent_dirs
+from src.agent_researcher.search_space_advisor import SearchSpaceAdvisor
 from src.agent_researcher.state_manager import StateManager, hash_filters
 from src.agent_researcher.strategy_manager import StrategyManager
 from src.agent_researcher.vault_reader import VaultReader
@@ -40,11 +42,13 @@ class ResearchOrchestrator:
             symbols=symbols,
             model=model,
         )
+        llm_client = OpenCodeClient()
         self.generator = HypothesisGenerator(
-            llm_client=OpenCodeClient(),
+            llm_client=llm_client,
             vault_reader=VaultReader(),
             state_manager=self.state,
         )
+        self.search_space_advisor = SearchSpaceAdvisor(llm_client=llm_client)
         self.drift_monitor = DriftMonitor(
             strategy_manager=self.strategy_manager,
             state_manager=self.state,
@@ -87,8 +91,23 @@ class ResearchOrchestrator:
                 self.strategy_manager.persist_validated(record)
             records.append(record.to_dict())
 
+        advisor_result = self._run_search_space_advisor()
+
         self.state.mark_run()
-        return {"drift_events": drift_events, "evaluations": records}
+        return {
+            "drift_events": drift_events,
+            "evaluations": records,
+            "search_space_updates": advisor_result,
+        }
+
+    def _run_search_space_advisor(self) -> dict:
+        """Ask the LLM to adjust HPO search spaces based on current results."""
+        try:
+            hpo_summary = load_hpo_summary()
+            return self.search_space_advisor.advise(hpo_summary)
+        except Exception:
+            logger.exception("SearchSpaceAdvisor failed, continuing without update")
+            return {"updated": 0, "skipped": 0, "errors": 1}
 
 
 def _has_actionable_drift(events: list[dict]) -> bool:

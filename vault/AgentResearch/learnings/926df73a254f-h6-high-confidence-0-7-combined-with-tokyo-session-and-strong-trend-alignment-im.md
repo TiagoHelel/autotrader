@@ -21,3 +21,10 @@ Research verdict REJECTED_N with n=0; holdout was not consumed because the resea
   "signal": 1
 }
 ```
+
+## Related
+
+- Hypothesis: [[hypotheses/926df73a254f-h6-high-confidence-0-7-combined-with-tokyo-session-and-strong-trend-alignment-im]]
+- Experiment log: [[logs/926df73a254f-h6-high-confidence-0-7-combined-with-tokyo-session-and-strong-trend-alignment-im]]
+- Folder: [[AgentResearch/learnings/_index|learnings]]
+- Area: [[AgentResearch/README|AgentResearch]]

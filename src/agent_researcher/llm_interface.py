@@ -36,13 +36,8 @@ class OpenCodeClient:
         self.agent = os.getenv("AGENT_RESEARCH_OPENCODE_AGENT", agent)
         self.timeout_seconds = timeout_seconds
 
-    def generate_hypotheses(
-        self,
-        context: dict[str, Any],
-        max_hypotheses: int = 3,
-    ) -> list[Hypothesis]:
-        """Call OpenCode and parse its JSON response."""
-        prompt = self.build_prompt(context, max_hypotheses=max_hypotheses)
+    def call(self, prompt: str) -> str:
+        """Send an arbitrary prompt to OpenCode and return raw stdout."""
         self._write_prompt(prompt)
         command = self._build_command()
         try:
@@ -67,10 +62,23 @@ class OpenCodeClient:
         if result.returncode != 0:
             self._dump_raw(stdout, stderr)
             raise LLMCallError(stderr.strip() or f"opencode exit {result.returncode}")
+        return stdout
+
+    def generate_hypotheses(
+        self,
+        context: dict[str, Any],
+        max_hypotheses: int = 3,
+    ) -> list[Hypothesis]:
+        """Call OpenCode and parse its JSON response."""
+        prompt = self.build_prompt(context, max_hypotheses=max_hypotheses)
+        try:
+            stdout = self.call(prompt)
+        except LLMCallError:
+            raise
         try:
             return parse_hypotheses_json(stdout)
         except LLMCallError:
-            self._dump_raw(stdout, stderr)
+            self._dump_raw(stdout, "")
             raise
 
     def build_prompt(

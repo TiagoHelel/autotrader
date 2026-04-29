@@ -8,6 +8,7 @@ from typing import Any
 
 import pandas as pd
 
+from src.agent_researcher.hpo_context import load_hpo_summary
 from src.agent_researcher.llm_interface import OpenCodeClient
 from src.agent_researcher.models import Hypothesis
 from src.agent_researcher.paths import ACTIVE_STRATEGIES_DIR, PROJECT_ROOT
@@ -41,6 +42,7 @@ class HypothesisGenerator:
             "daily_eval": load_daily_eval_summary(),
             "filter_log": load_filter_log_summary(),
             "active_strategies": load_active_strategy_summary(),
+            "hpo_summary": load_hpo_summary(),
         }
         return self.llm_client.generate_hypotheses(
             context,

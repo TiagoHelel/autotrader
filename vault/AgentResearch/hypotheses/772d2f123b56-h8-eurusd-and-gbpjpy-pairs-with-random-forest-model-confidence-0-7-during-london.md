@@ -32,3 +32,10 @@ From daily_eval data, EURUSD shows mean hit_t1=0.4713 and GBPJPY=0.4318 (both ab
 ## Expected behavior
 
 hit_t1 >= 54% (vs ~47-48% baseline for these pairs), p-value < 0.05 Bonferroni-adjusted, PnL > 1 bps/trade after spread costs
+
+## Related
+
+- Learning: [[learnings/772d2f123b56-h8-eurusd-and-gbpjpy-pairs-with-random-forest-model-confidence-0-7-during-london]]
+- Experiment log: [[logs/772d2f123b56-h8-eurusd-and-gbpjpy-pairs-with-random-forest-model-confidence-0-7-during-london]]
+- Folder: [[AgentResearch/hypotheses/_index|hypotheses]]
+- Area: [[AgentResearch/README|AgentResearch]]

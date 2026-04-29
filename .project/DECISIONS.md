@@ -4,6 +4,82 @@
 
 ---
 
+### [025] — Temporal conviction e trajectory filter: informativos ate validacao
+
+- **Date:** 2026-04-28
+- **Status:** implemented (informativo)
+- **Decision:** Dois novos filtros de sinal implementados em `src/decision/`:
+  - **Trajectory filter** (`trajectory_ok` bool): trajetoria de pred_t1/t2/t3 deve ser
+    monotonica na direcao do sinal (BUY: t1 > current && t2 > t1 && t3 > t2). Ativavel
+    via `trajectory_filter=True` em `generate_signal()`.
+  - **Temporal conviction** (`"high"/"low"/"unknown"`): verifica se as ultimas 3 "vintages"
+    de predicao para o mesmo candle T+1 concordam na direcao. T-2's `pred_t3`,
+    T-1's `pred_t2` e T's `pred_t1` devem apontar o mesmo sentido.
+  - Ambos ficam **informativos por padrao** (nao filtram sinais). Quando o agent researcher
+    acumular dados suficientes para validar que `trajectory_ok=True` ou
+    `temporal_conviction="high"` melhora `hit_t1`, ativar filtragem.
+- **Reasoning:**
+  - Ativar filtros sem validacao empirica pode eliminar sinais validos silenciosamente.
+    Melhor expor os campos no parquet primeiro, medir o impacto em `daily_eval`, depois
+    decidir se filtrar. Patterning "measure before you prune."
+  - Temporal conviction modela o insight de que o modelo revisa a mesma previsao 3 vezes
+    (t3→t2→t1 ao longo do tempo). Convergencia entre revisoes e sinal de robustez.
+- **Consequences:**
+  - `data/predictions/{symbol}.parquet` agora carrega `trajectory_ok` e
+    `temporal_conviction` em cada linha via o `signals` dict.
+  - Agent researcher pode filtrar por esses campos no `daily_eval` para descobrir
+    se melhoram verdicts.
+  - Para ativar filtragem: passar `trajectory_filter=True` em `generate_signals_for_models`
+    no engine, ou usar conviction como gate no `generate_signal` call.
+
+---
+
+### [024] — LLM so pode estreitar ranges do Optuna, nunca alargar
+
+- **Date:** 2026-04-27
+- **Status:** implemented
+- **Decision:** `SearchSpaceAdvisor._validate_param_spec` rejeita qualquer spec do LLM
+  onde `low < default_low` ou `high > default_high`. O LLM so pode estreitar os bounds
+  — nunca widen.
+- **Reasoning:** O LLM corre em subprocess sem sandbox. Sem validacao, um prompt injection
+  ou alucinacao poderia enviar `max_depth: [1, 1000]` e desperdicar todas as trials do
+  Optuna no territorio invalido. Restringir a estreitar e a garantia mais simples: o pior
+  caso e ranges mais conservadores, nunca nonsense.
+- **Consequences:** Se o LLM sugerir bounds fora dos defaults, a spec e silenciosamente
+  descartada (action: `skipped`). O estudo roda com os defaults. Nenhuma excecao eh
+  levantada — fail-safe.
+
+---
+
+### [023] — HPO em dois loops: Optuna (rapido) + LLM (estrategista lento)
+
+- **Date:** 2026-04-27
+- **Status:** implemented
+- **Decision:** Hyperparameter optimisation roda em arquitetura de dois loops integrada
+  ao scheduler existente:
+  - **Loop rapido (04:00 UTC):** Optuna TPE/CMA-ES com objetivo CPCV, round-robin sobre
+    `HPO_MODELS × SYMBOL_GROUPS`. Resultados em SQLite (`data/hpo/studies.db`) + JSON
+    por champion (`data/hpo/champions/`). Promoter avalia champion/challenger com
+    `MIN_IMPROVEMENT=0.5pp, MAX_CHAMPION_DAYS=60`.
+  - **Loop lento (03:00 UTC, dentro do agent_researcher):** `SearchSpaceAdvisor` lê
+    champions + top trials, pede ao LLM para estreitar os bounds do Optuna. Resultado
+    salvo em `data/hpo/search_spaces/`. HPO do dia seguinte usa esses bounds.
+- **Alternatives considered:**
+  - **(A) HPO como processo separado (novo startup.bat entry):** rejeitado — mais um
+    processo pra gerenciar, nao acrescenta nada.
+  - **(B) LLM trial-by-trial (Optuna custom sampler):** rejeitado — LLM eh lento (min/call)
+    e Optuna precisa de centenas de trials. LLM como sampler bottlenecks o estudo por
+    fator 1000x.
+  - **(C, escolhida) LLM ajusta bounds, Optuna amostra:** separacao de responsabilidades
+    correta — LLM interpreta patrao; Optuna busca dentro do espaco.
+- **Consequences:**
+  - Primeira noite: nenhum champion — modelos usam defaults de `registry.py`.
+  - Apos ~20 trials/study, promoter comeca a avaliar candidatos.
+  - `registry.py:create_all_models(symbol)` le champion params lazily (evita circular import).
+  - Suite: ~543 testes (47 novos).
+
+---
+
 ### [022] - MT5 acessado via HTTP pull (nao webhook/push)
 
 - **Date:** 2026-04-26

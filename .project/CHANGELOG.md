@@ -1,5 +1,76 @@
 # Changelog
 
+## [2026-04-28] - Temporal Conviction + Trajectory Filter
+
+**What changed:**
+
+- `src/decision/conviction.py` (novo) — `compute_temporal_conviction(symbol, model, pred_dir)`
+  le as ultimas 3 linhas do parquet para o model em questao e checa se T-2's `pred_t3`,
+  T-1's `pred_t2` e T's `pred_t1` apontam a mesma direcao para o candle T+1. Retorna
+  `"high"` (todas concordam e nao-zero), `"low"` (pelo menos uma discorda) ou `"unknown"`
+  (historico insuficiente ou arquivo ausente). `compute_all_convictions()` retorna
+  `{model: conviction}` para todos os modelos de uma vez.
+- `src/decision/signal.py` — `generate_signal()` ganha dois novos campos no dict de saida:
+  `trajectory_ok` (bool) e `temporal_conviction` (str|None). Novo param
+  `trajectory_filter=False`: quando True forca HOLD se trajetoria nao for monotonica
+  (pred_t1→pred_t2→pred_t3 nao crescente/decrescente na direcao do sinal). Ambos os
+  filtros sao **off by default** para nao alterar comportamento existente.
+  `generate_signals_for_models()` ganha `trajectory_filter` e `convictions` params.
+- `src/execution/engine.py` — `compute_all_convictions()` chamado antes de
+  `_save_predictions()` (importante: parquet da rodada atual nao esta escrito ainda).
+  `convictions` passado para `generate_signals_for_models`.
+- `tests/decision/test_conviction.py` (novo) — 13 testes cobrindo todos os casos:
+  sem arquivo, historico insuficiente, concordancia up/down, discordancia, flat,
+  filtro por model, janela dos ultimos 3 rows.
+- `tests/decision/test_signal.py` — 8 novos testes para trajectory_ok, trajectory_filter
+  e temporal_conviction. Schema test atualizado com novos campos.
+- `tests/execution/test_engine.py` — mock de `generate_signals_for_models` atualizado
+  para aceitar `**kwargs` (estava quebrando com o novo param `convictions`).
+
+**Why:**
+- A mesma previsao de preco para o candle T+1 e feita 3 vezes ao longo do tempo
+  (pred_t3 em T-2, pred_t2 em T-1, pred_t1 em T). Quando as 3 revisoes convergem
+  para a mesma direcao, o modelo mostrou consistencia — isso e "temporal conviction".
+  Trajectory filter garante que as 3 previsoes formem um caminho coerente (nao so
+  que concordem na direcao, mas que a magnitude seja monotonica). Ambos ficam como
+  campos informativos no parquet para o agent researcher validar antes de ativar
+  como gate real de sinal.
+
+---
+
+## [2026-04-27] - HPO Pipeline + LLM Search Space Advisor
+
+**What changed:**
+
+- `src/training/hpo_objective.py` — objetivo Optuna com CPCV, penaliza overfit gap > 10%.
+  `DEFAULT_SPACES` para xgboost, random_forest, linear. `build_objective()` retorna closure.
+- `src/training/hpo_store.py` — SQLite via Optuna + JSON por champion. `SYMBOL_GROUPS`
+  (4 grupos), `HPO_MODELS`, `get_best_params_for_symbol(model, symbol)`.
+- `src/training/hpo_runner.py` — round-robin `model × group`, carrega features de parquet
+  cacheado (sem MT5). `run_nightly_hpo()` e entry point do scheduler.
+- `src/training/promoter.py` — champion/challenger: `MIN_IMPROVEMENT=0.005`,
+  `MAX_CHAMPION_DAYS=60`, `MIN_TRIALS_FOR_PROMOTION=20`. `run_promotion_cycle()`.
+- `src/agent_researcher/hpo_context.py` — `load_hpo_summary()` retorna champions +
+  top_trials_by_study + param_patterns para o LLM.
+- `src/agent_researcher/search_space_advisor.py` — LLM estreita bounds do Optuna.
+  `_validate_param_spec` impede widen. `SearchSpaceAdvisor.advise()` salva em
+  `data/hpo/search_spaces/`.
+- `src/agent_researcher/llm_interface.py` — extraido `call(prompt)` reutilizavel.
+- `src/agent_researcher/hypothesis_generator.py` — `hpo_summary` incluido no contexto LLM.
+- `src/agent_researcher/orchestrator.py` — `_run_search_space_advisor()` apos cada ciclo.
+- `src/models/registry.py` — `create_all_models(symbol=None)` le champion params lazily.
+- `scripts/run_hpo.py` — CLI manual HPO. `scripts/scheduler.py` — job `hpo` 04:00 UTC.
+- **47 testes novos** em `tests/training/` (novo package) e updates em
+  `tests/agent_researcher/`, `tests/models/`. Suite: **~543 passed**.
+
+**Why:**
+- Modelos usavam hiperparametros hardcoded desde sempre. HPO automatico com CPCV garante
+  que os params sejam otimizados com validacao rigorosa (sem leakage). LLM como
+  estrategista (ajuste de bounds) + Optuna como executor (busca) e a divisao correta:
+  LLM interpreta padroes, Optuna amostra eficientemente dentro do espaco.
+
+---
+
 ## [2026-04-26] - MT5 HTTP pull bridge (passo 1 do desacoplamento)
 
 **What changed:**

@@ -77,6 +77,109 @@ FastAPI (32+ endpoints) + WebSocket -----> React Dashboard (12 paginas)
 
 ---
 
+## MT5 Bridge (`mt5_api/`)
+
+Servidor FastAPI fino que expoe `MT5Connection` via **pull HTTP**. Permite
+manter o terminal MetaTrader 5 numa maquina Windows dedicada e rodar todo o
+resto do stack (ML, LLM, news, command_center) em outra maquina (Linux).
+
+### Por que pull (e nao webhook/push)?
+
+- **Backtest e research** precisam de range historico arbitrario sob demanda
+  (`copy_rates_range`). Webhook so cobre tempo real.
+- **Recovery pos-queda** vira trivial: o cliente pede o range que perdeu
+  (com push voce perde silenciosamente).
+- A lib `MetaTrader5` nao eh thread-safe → o servidor serializa requests
+  com `threading.Lock` global. Pra escalar leitura, em vez de varios
+  workers, prefira cache local no cliente.
+
+Push (Redis pub/sub ou WebSocket) pode ser adicionado *depois* como
+otimizacao para o tempo real — a base pull cobre 100% dos casos hoje.
+
+### Como subir
+
+Ja vai junto no `startup.bat`. Manualmente:
+
+```bash
+python -m mt5_api.main
+```
+
+Defaults: host `0.0.0.0`, port `8002`. Lifespan abre `MT5Connection` no
+startup e fecha no shutdown.
+
+### Endpoints (todos GET, read-only)
+
+| Rota | Descricao |
+|---|---|
+| `/health` | Sem auth. Retorna `{status, connected}`. |
+| `/account` | `account_info()` (login, balance, equity, margin, ...). |
+| `/terminal` | `terminal_info()` (build, path, trade_allowed, ...). |
+| `/symbols?group=*USD*` | Lista simbolos visiveis no broker. |
+| `/symbols/{symbol}` | Info do simbolo (bid/ask/spread/digits/...). |
+| `/symbols/{symbol}/tick` | Ultimo tick (`time` em ISO + bid/ask/last/volume). |
+| `/candles/{symbol}?tf=M1&count=1000` | Ultimos N candles. |
+| `/candles/{symbol}?tf=M1&date_from=...&date_to=...` | Range temporal. |
+
+`tf` aceita `M1, M5, M15, M30, H1, H4, D1, W1, MN1`. `count` cap em 100k.
+`date_from`/`date_to` em ISO (`2026-04-01T00:00:00`).
+
+### Exemplos
+
+```bash
+# Health (sem auth)
+curl http://localhost:8002/health
+# {"status":"ok","connected":true}
+
+# Account (Bearer obrigatorio se MT5_API_TOKEN setado)
+curl -H "Authorization: Bearer $MT5_API_TOKEN" \
+     http://localhost:8002/account
+
+# Ultimos 50 candles M5 do EURUSD
+curl "http://localhost:8002/candles/EURUSD?tf=M5&count=50"
+
+# Range historico
+curl "http://localhost:8002/candles/EURUSD?tf=M1&date_from=2026-04-01T00:00:00&date_to=2026-04-02T00:00:00"
+```
+
+### Backend chaveavel: `MT5_BACKEND=local|remote`
+
+Os consumidores em runtime usam a factory `src/mt5/__init__.py:get_mt5_connection()`,
+que escolhe entre dois backends com a **mesma interface publica**:
+
+- `local` (default) → `MT5Connection`, importa `MetaTrader5` direto.
+  **Windows-only**.
+- `remote` → `MT5RemoteClient`, fala HTTP com `mt5_api`. Funciona em
+  qualquer plataforma.
+
+Para portar pra Linux, basta o `.env`:
+
+```env
+# Bridge MT5 HTTP
+MT5_BACKEND=remote
+MT5_API_URL=http://<ip-windows>:8002
+MT5_API_TOKEN=         # opcional; se setado, servidor + cliente exigem Bearer
+```
+
+Sem mexer no `.env`, comportamento atual (Windows monolitico) fica identico.
+
+### Seguranca
+
+- Auth opcional via Bearer token (`MT5_API_TOKEN`). Se nao setado, servidor
+  abre publico — use somente em LAN/VPN.
+- Recomendado: VPN (Tailscale/WireGuard) entre Linux e Windows + token.
+  Expor diretamente na internet exige TLS na frente (Caddy/Traefik) e
+  rate limiting.
+
+### Limitacoes atuais
+
+- **Read-only**. Nao executa ordens. Quando entrar execucao, vai vir
+  `POST /order` com `client_id` para idempotencia (proteger retry de rede).
+- Sem cache no servidor. Cliente pode cachear localmente.
+- `MT5RemoteClient.get_candles` so aceita timeframe **string** (`"M1"`),
+  nao a constante numerica da lib `MetaTrader5`.
+
+---
+
 ## Simbolos Suportados
 
 ### Primarios (11)
@@ -389,8 +492,14 @@ python -m src.evaluation.daily_eval [--date | --from --to]
 
 ### Agendamento (`scripts/scheduler.py`)
 
-Scheduler in-process roda **upload_to_s3.py @ 01:00 UTC** e **daily_eval @ 02:00 UTC**
-todo dia. Converte UTC para horario local automaticamente.
+Scheduler in-process roda 4 jobs noturnos. Converte UTC para horario local automaticamente.
+
+| Job | UTC | Timeout | Descricao |
+|---|---|---|---|
+| `upload` | 01:00 | 30 min | S3 upload (predictions, candles, news, agent state) |
+| `eval` | 02:00 | 30 min | daily_eval — cruza pred vs real, atualiza vault |
+| `agent` | 03:00 | 30 min | agent_researcher + search_space_advisor |
+| `hpo` | 04:00 | **120 min** | Optuna (50 trials/study) + promoter |
 
 ```bash
 python scripts/scheduler.py --dry-run        # mostra cronograma
@@ -481,6 +590,55 @@ gate em camadas para nao gerar/exibir/avaliar sinais com mercado fechado:
 > nao virarem flaky por dia da semana — cobertura do gate em si fica em
 > `tests/features/test_session.py::TestIsMarketOpen` e
 > `tests/api/test_signals.py::test_radar_returns_market_closed_when_forex_shut`.
+
+---
+
+## HPO Pipeline (Hyperparameter Optimisation 24/7)
+
+`src/training/` implementa otimizacao continua de hiperparametros com dois loops:
+
+### Loop rapido — Optuna (04:00 UTC, scheduler)
+
+Roda round-robin por `HPO_MODELS × SYMBOL_GROUPS` com objetivo CPCV:
+- Penaliza overfit gap acima de 10%: `score = mean_acc - max(0, gap - 0.10) * 2.0`
+- `MIN_TRIALS_FOR_PROMOTION = 20` por study antes de avaliar champion/challenger
+- Champion promovido quando `challenger_score - champion_score >= MIN_IMPROVEMENT (0.5pp)`
+- Champions expiram apos `MAX_CHAMPION_DAYS = 60` dias (sem melhoria → challenger assume)
+
+**Symbol groups** (compartilham um study Optuna por modelo):
+
+| Grupo | Simbolos |
+|---|---|
+| `yen_crosses` | USDJPY, EURJPY, GBPJPY |
+| `dollar_majors` | EURUSD, GBPUSD, AUDUSD, USDCAD, NZDUSD, USDCHF |
+| `crosses` | EURGBP |
+| `commodities` | XAUUSD |
+
+**Artefatos:** `data/hpo/studies.db` (Optuna SQLite), `data/hpo/champions/` (JSON por champion).
+
+**Uso manual:**
+```bash
+python scripts/run_hpo.py              # HPO + promoter (50 trials/study)
+python scripts/run_hpo.py --hpo-only   # so Optuna, sem promoter
+python scripts/run_hpo.py --promote-only
+python scripts/run_hpo.py -v           # verbose
+```
+
+### Loop lento — LLM Search Space Advisor (03:00 UTC, dentro do agent researcher)
+
+Depois de cada ciclo do orchestrator, `SearchSpaceAdvisor.advise()`:
+1. Carrega champions + top 5 trials por study (via `hpo_context.load_hpo_summary()`)
+2. Pede ao LLM para estreitar os bounds do Optuna (narrowing only — nunca widen)
+3. Persiste em `data/hpo/search_spaces/` — Optuna do dia seguinte usa esses bounds
+
+**Seguranca:** `_validate_param_spec` rejeita silenciosamente qualquer spec onde
+`low < default_low` ou `high > default_high` (decisao [024]).
+
+### Integration com modelos
+
+`src/models/registry.py:create_all_models(symbol=None)` le champion params lazily:
+- Se `symbol` informado: resolve para `SYMBOL_TO_GROUP`, busca JSON de champion, aplica
+- Se nao ha champion (primeiras noites) ou `symbol=None`: usa defaults hardcoded
 
 ---
 
@@ -694,6 +852,7 @@ autotrader/
 │   │   └── backtest_experiments.py # FastAPI router: backtest + experiments + ranking (12 endpoints)
 │   ├── decision/
 │   │   ├── signal.py            # Geracao de sinais (BUY/SELL/HOLD) com session awareness
+│   │   ├── conviction.py        # Temporal conviction (consistencia entre vintages de predicao)
 │   │   └── model_selector.py    # Auto-selecao de modelo por regime + sessao
 │   ├── backtest/
 │   │   └── engine.py            # Backtest engine (PnL, Sharpe, Drawdown)
@@ -718,7 +877,20 @@ autotrader/
 │   │   ├── random_forest.py     # Random forest
 │   │   ├── xgboost_model.py     # XGBoost
 │   │   ├── ema_heuristic.py     # EMA heuristic
-│   │   └── registry.py          # ModelRegistry (gerencia todos)
+│   │   └── registry.py          # ModelRegistry — le champion params lazily
+│   ├── training/
+│   │   ├── hpo_objective.py     # Objetivo Optuna com CPCV + penalidade overfit
+│   │   ├── hpo_store.py         # SQLite/JSON storage: studies, champions, groups
+│   │   ├── hpo_runner.py        # Round-robin model×group, entry point scheduler
+│   │   └── promoter.py          # Champion/challenger logic
+│   ├── agent_researcher/
+│   │   ├── orchestrator.py      # Loop principal: ciclos de hipotese + search space
+│   │   ├── hypothesis_generator.py # Monta contexto (eval, vault, hpo_summary) + chama LLM
+│   │   ├── hpo_context.py       # load_hpo_summary() — champions + top trials para o LLM
+│   │   ├── search_space_advisor.py # LLM estreita bounds Optuna; valida; persiste
+│   │   ├── llm_interface.py     # OpenCodeClient (call + generate_hypotheses)
+│   │   ├── vault_writer.py      # Escrita em vault/AgentResearch/
+│   │   └── state.json           # Estado runtime (gitignored — source of truth no S3)
 │   ├── execution/
 │   │   ├── engine.py            # PredictionEngine (orquestrador)
 │   │   └── loop.py              # Loop 24/7 + news pipeline diario
@@ -756,6 +928,10 @@ autotrader/
 │   ├── experiments/             # Historico de treinos + feature experiments + ranking
 │   ├── backtest/                # Trades simulados + metricas por modelo
 │   ├── news/                    # Noticias raw + LLM features (*.parquet)
+│   ├── hpo/
+│   │   ├── studies.db           # Optuna SQLite (todos os trials)
+│   │   ├── champions/           # JSON por (model, group): params + score + promoted_at
+│   │   └── search_spaces/       # JSON com bounds ajustados pelo LLM
 │   └── logs/                    # CSV logs (system, predictions, decisions, signals, backtest)
 │
 ├── tests/
@@ -861,6 +1037,8 @@ O dashboard estara disponivel em `http://localhost:5173`
 | httpx | 0.28.1 | HTTP client (LLM calls) |
 | pyarrow | 23.0.1 | Parquet I/O |
 | python-dotenv | 1.2.2 | Env vars |
+| optuna | — | HPO (Bayesian search, SQLite backend) |
+| schedule | — | Scheduler in-process (nightly jobs) |
 
 ---
 
@@ -905,7 +1083,7 @@ Metricas calculadas separadamente para t+1, t+2, t+3.
 
 ## Testes
 
-> **Status (2026-04-17):** 501 testes Python + 245 testes frontend passando. Cobertura: CRITICAL 96.6%, ML 80.3%, overall 85.1%. Ver [Como rodar tudo](#como-rodar-tudo) abaixo.
+> **Status (2026-04-28):** ~591 testes Python + 245 testes frontend passando. Cobertura: CRITICAL 96.6%, ML 80.3%, overall 85.1%. Ver [Como rodar tudo](#como-rodar-tudo) abaixo.
 
 ### Como rodar tudo
 
@@ -913,7 +1091,7 @@ Metricas calculadas separadamente para t+1, t+2, t+3.
 ```bash
 # Python
 source venv/Scripts/activate     # Linux/Mac: venv/bin/activate
-pytest -q                        # ~90s, 501 passed
+pytest -q                        # ~591 passed
 
 # Frontend
 cd command_center/frontend
@@ -986,9 +1164,11 @@ tests/
 ├── evaluation/                  # 56 testes — CPCV, overfitting, evaluator
 ├── execution/                   # 47 testes — engine + loop (com mocks MT5)
 ├── features/                    # 38 testes — engineering, session
-├── models/                      # 32 testes — modelos ML, ensemble, no-leakage
+├── models/                      # 34 testes — modelos ML, ensemble, no-leakage + champion params
 ├── property/                    # 17 testes — hypothesis (invariantes)
 ├── research/                    # testes de feature_experiments, conditional_analysis
+├── training/                    # 30 testes — hpo_store, hpo_objective, promoter
+├── agent_researcher/            # ~28 testes — search_space_advisor, llm_interface, ...
 └── ...
 ```
 

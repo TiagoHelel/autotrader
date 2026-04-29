@@ -31,3 +31,8 @@ From daily_eval data, EURUSD shows mean hit_t1=0.4713 and GBPUSD=0.4767 (both ab
 ## Expected behavior
 
 hit_t1 >= 52% (vs ~47% baseline for these pairs), p-value < 0.05, PnL > 1 bps/trade after spread costs
+
+## Related
+
+- Folder: [[AgentResearch/hypotheses/_index|hypotheses]]
+- Area: [[AgentResearch/README|AgentResearch]]

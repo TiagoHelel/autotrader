@@ -3,7 +3,7 @@
 > **This is the most important file for AI assistants. Keep it current.**
 > Update this at the start or end of every session.
 
-_Last updated: 2026-04-26 (mt5_api pull bridge — passo 1 do desacoplamento)_
+_Last updated: 2026-04-28 (temporal conviction + trajectory filter)_
 
 ---
 
@@ -16,6 +16,41 @@ equivalente) validar em holdout 30d.
 
 ## What's happening right now
 
+- **Temporal Conviction + Trajectory Filter (2026-04-28):**
+  - Novo modulo `src/decision/conviction.py`: `compute_temporal_conviction(symbol, model, pred_dir)`
+    le os ultimos 3 rows do parquet por model e verifica se T-2's `pred_t3`, T-1's `pred_t2` e
+    T's `pred_t1` apontam a mesma direcao para o mesmo candle futuro (T+1). Retorna
+    `"high"` / `"low"` / `"unknown"`.
+  - `src/decision/signal.py` ganhou dois novos campos no output: `trajectory_ok` (bool —
+    True quando pred_t1/t2/t3 formam trajetoria monotonica na direcao do sinal) e
+    `temporal_conviction` (str — repassado de fora). Novo param `trajectory_filter=False`:
+    quando True forca HOLD se trajetoria nao for monotonica.
+  - `generate_signals_for_models()` ganhou `trajectory_filter` e `convictions` params e
+    os repassa para cada `generate_signal()`.
+  - `src/execution/engine.py`: chama `compute_all_convictions()` **antes** de
+    `_save_predictions()` (parquet da rodada atual ainda nao foi escrito nesse ponto),
+    passa `convictions=convictions` para `generate_signals_for_models`.
+  - Ambos os campos viajam para o parquet via `signals` dict. Agent researcher passa
+    a ter `trajectory_ok` e `temporal_conviction` disponiveis nos dados de eval.
+  - Trajectory filter e temporal conviction sao **informativos por padrao** (nao filtram).
+    Ativar `trajectory_filter=True` quando o agent researcher validar que filtragem
+    melhora hit_t1.
+  - 13 testes novos em `tests/decision/test_conviction.py`, 8 novos em `test_signal.py`.
+    Suite total: **591 passed** (3 pre-existing failures em `test_loop.py` — loop tests
+    patcham `MT5Connection` que nao existe mais no modulo, pre-existentes, nao relacionados).
+- **HPO Pipeline + LLM Search Space Advisor (2026-04-27):**
+  - Dois loops integrados ao scheduler: Optuna (04:00 UTC, 2h timeout) + LLM advisor
+    (dentro do agent_researcher, 03:00 UTC).
+  - Novos modulos: `src/training/hpo_objective.py`, `hpo_store.py`, `hpo_runner.py`,
+    `promoter.py`, `src/agent_researcher/hpo_context.py`, `search_space_advisor.py`.
+  - `src/models/registry.py:create_all_models(symbol)` le champion params via lazy import
+    de `hpo_store`; fallback para defaults se ainda nao houver champion.
+  - LLM so pode estreitar ranges do Optuna (decisao [024]) — `_validate_param_spec`
+    rejeita qualquer tentativa de widen.
+  - Champion/challenger: `MIN_IMPROVEMENT=0.5pp`, `MAX_CHAMPION_DAYS=60`,
+    `MIN_TRIALS_FOR_PROMOTION=20`. Artefatos em `data/hpo/`.
+  - 47 testes novos — suite total ~543 passed (antes desta sessao).
+  - `scripts/run_hpo.py` para rodar manual; `scripts/scheduler.py` job `hpo` a 04:00 UTC.
 - **MT5 HTTP pull bridge (2026-04-26) — desacoplamento completo (read-only):**
   - Servidor `mt5_api/` (FastAPI) expondo `MT5Connection` via pull HTTP
     (porta default 8002). Endpoints: `/health`, `/account`, `/terminal`,

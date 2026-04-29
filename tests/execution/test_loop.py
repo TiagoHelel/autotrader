@@ -142,7 +142,7 @@ class TestRunForever:
         fake_conn_cm.__exit__ = MagicMock(return_value=False)
 
         with patch("src.execution.loop.setup_logging"), \
-             patch("src.execution.loop.MT5Connection", return_value=fake_conn_cm), \
+             patch("src.execution.loop.get_mt5_connection", return_value=fake_conn_cm), \
              patch("src.execution.loop.validate_symbols", return_value=["EURUSD"]), \
              patch("src.execution.loop.PredictionEngine") as MockEngine, \
              patch("src.execution.loop._run_news_pipeline"), \
@@ -169,7 +169,7 @@ class TestRunForever:
         sleep_calls = []
 
         with patch("src.execution.loop.setup_logging"), \
-             patch("src.execution.loop.MT5Connection", return_value=fake_conn_cm), \
+             patch("src.execution.loop.get_mt5_connection", return_value=fake_conn_cm), \
              patch("src.execution.loop.validate_symbols", return_value=["EURUSD"]), \
              patch("src.execution.loop.PredictionEngine", return_value=engine), \
              patch("src.execution.loop._run_news_pipeline"), \
@@ -199,7 +199,7 @@ class TestRunForever:
 
         # Make news refresh trigger: big prediction_interval default → bypass with monkeypatch
         with patch("src.execution.loop.setup_logging"), \
-             patch("src.execution.loop.MT5Connection", return_value=fake_conn_cm), \
+             patch("src.execution.loop.get_mt5_connection", return_value=fake_conn_cm), \
              patch("src.execution.loop.validate_symbols", return_value=["EURUSD"]), \
              patch("src.execution.loop.PredictionEngine", return_value=engine), \
              patch("src.execution.loop._run_news_pipeline") as mock_news, \

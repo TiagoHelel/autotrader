@@ -32,3 +32,10 @@ From daily_eval data, USDJPY shows mean hit_t1=0.431 and USDCAD=0.4597 (both abo
 ## Expected behavior
 
 hit_t1 >= 52% (vs ~43-46% baseline for these pairs), p-value < 0.05 Bonferroni-adjusted, PnL > 1 bps/trade after spread costs
+
+## Related
+
+- Learning: [[learnings/70b73c88d8f1-h9-usdjpy-and-usdcad-pairs-with-xgboost-model-confidence-0-6-during-new-york-ses]]
+- Experiment log: [[logs/70b73c88d8f1-h9-usdjpy-and-usdcad-pairs-with-xgboost-model-confidence-0-6-during-new-york-ses]]
+- Folder: [[AgentResearch/hypotheses/_index|hypotheses]]
+- Area: [[AgentResearch/README|AgentResearch]]

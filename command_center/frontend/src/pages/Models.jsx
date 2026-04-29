@@ -2,9 +2,8 @@ import { useMemo } from 'react'
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-import { Trophy, Medal, Award, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { Trophy, Medal, Award, AlertTriangle, ShieldCheck, Crown } from 'lucide-react'
 import useApi from '../hooks/useApi'
 import { api } from '../services/api'
 
@@ -20,6 +19,9 @@ export default function Models() {
   )
   const { data: modelsInfo } = useApi(
     () => api.getModelsInfo(), [], {}
+  )
+  const { data: hpoData } = useApi(
+    () => api.getHpoChampions(), [], { interval: 60_000 }
   )
   const { data: validationData } = useApi(
     () => api.getModelsValidation(), [], { interval: REFRESH_INTERVAL }
@@ -269,9 +271,16 @@ export default function Models() {
       {/* PnL-Based Ranking */}
       <PnlRanking />
 
+      {/* HPO Champions */}
+      <HpoChampions champions={hpoData?.champions || []} />
+
       {/* Model Info Table */}
       <div className="glass-card rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">Model Details</h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-1">Model Details</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Default params shown — champion params are applied per-symbol at training time.
+          Use <code className="text-gray-400">/api/predict/models/info?symbol=EURUSD</code> to see active params for a symbol.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -296,6 +305,79 @@ export default function Models() {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function HpoChampions({ champions }) {
+  if (!champions.length) {
+    return (
+      <div className="glass-card rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Crown className="h-4 w-4 text-yellow-400" />
+          <h3 className="text-sm font-semibold text-gray-300">HPO Champions</h3>
+        </div>
+        <p className="text-xs text-gray-500">
+          No champions yet — first nightly HPO run needs ≥20 trials per study before promoting.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Crown className="h-4 w-4 text-yellow-400" />
+        <h3 className="text-sm font-semibold text-gray-300">HPO Champions</h3>
+        <span className="ml-auto text-xs text-gray-500">{champions.length} active</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-gray-500 border-b border-gray-800">
+              <th className="text-left py-2 px-3">Model</th>
+              <th className="text-left py-2 px-3">Group</th>
+              <th className="text-right py-2 px-3">Score</th>
+              <th className="text-left py-2 px-3">Params</th>
+              <th className="text-left py-2 px-3">Reason</th>
+              <th className="text-left py-2 px-3">Promoted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {champions.map((c) => (
+              <tr key={`${c.model_name}-${c.symbol_group}`} className="border-b border-gray-800/50">
+                <td className="py-2 px-3 text-gray-300 font-medium">{c.model_name}</td>
+                <td className="py-2 px-3 text-blue-400 font-mono text-xs">{c.symbol_group}</td>
+                <td className={`py-2 px-3 text-right font-mono font-semibold ${
+                  (c.score || 0) >= 0.55 ? 'text-green-400' :
+                  (c.score || 0) >= 0.45 ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  {((c.score || 0) * 100).toFixed(2)}%
+                </td>
+                <td className="py-2 px-3 text-gray-400 font-mono text-xs">
+                  {c.params ? Object.entries(c.params).map(([k, v]) =>
+                    `${k}=${v}`
+                  ).join(', ') : '—'}
+                </td>
+                <td className="py-2 px-3">
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                    c.promotion_reason === 'first_promotion'
+                      ? 'bg-blue-500/20 text-blue-400'
+                      : c.promotion_reason === 'improvement'
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-gray-700 text-gray-400'
+                  }`}>
+                    {c.promotion_reason || '—'}
+                  </span>
+                </td>
+                <td className="py-2 px-3 text-gray-500 text-xs">
+                  {c.promoted_at ? new Date(c.promoted_at).toLocaleDateString() : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )

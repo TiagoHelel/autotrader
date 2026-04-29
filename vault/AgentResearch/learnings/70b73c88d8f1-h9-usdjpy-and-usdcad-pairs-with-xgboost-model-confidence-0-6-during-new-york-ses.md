@@ -26,3 +26,10 @@ Research verdict REJECTED_N with n=0; holdout was not consumed because the resea
   ]
 }
 ```
+
+## Related
+
+- Hypothesis: [[hypotheses/70b73c88d8f1-h9-usdjpy-and-usdcad-pairs-with-xgboost-model-confidence-0-6-during-new-york-ses]]
+- Experiment log: [[logs/70b73c88d8f1-h9-usdjpy-and-usdcad-pairs-with-xgboost-model-confidence-0-6-during-new-york-ses]]
+- Folder: [[AgentResearch/learnings/_index|learnings]]
+- Area: [[AgentResearch/README|AgentResearch]]

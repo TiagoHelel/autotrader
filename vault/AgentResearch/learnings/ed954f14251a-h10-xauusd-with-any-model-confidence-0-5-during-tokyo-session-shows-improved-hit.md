@@ -24,3 +24,10 @@ Research verdict REJECTED_N with n=0; holdout was not consumed because the resea
   ]
 }
 ```
+
+## Related
+
+- Hypothesis: [[hypotheses/ed954f14251a-h10-xauusd-with-any-model-confidence-0-5-during-tokyo-session-shows-improved-hit]]
+- Experiment log: [[logs/ed954f14251a-h10-xauusd-with-any-model-confidence-0-5-during-tokyo-session-shows-improved-hit]]
+- Folder: [[AgentResearch/learnings/_index|learnings]]
+- Area: [[AgentResearch/README|AgentResearch]]

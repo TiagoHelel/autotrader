@@ -404,7 +404,7 @@ class TestRunCycle:
             "session_score": 1.0, "active_sessions": ["London"],
         })
         monkeypatch.setattr("src.execution.engine.generate_signals_for_models",
-                            lambda preds, cp, session_score=None: {
+                            lambda preds, cp, **kwargs: {
                                 name: {"signal": "HOLD", "confidence": 0.5, "expected_return": 0.0}
                                 for name in preds
                             })

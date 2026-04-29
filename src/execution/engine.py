@@ -44,6 +44,7 @@ from src.evaluation.overfitting import (
 )
 from src.evaluation.feature_importance import save_feature_importance
 from src.decision.signal import generate_signals_for_models, generate_ensemble_signal, log_signal
+from src.decision.conviction import compute_all_convictions
 from src.utils.logging import log_prediction, log_decision, log_session_metrics
 
 logger = logging.getLogger(__name__)
@@ -185,6 +186,8 @@ class PredictionEngine:
                 result["cpcv"] = cpcv_results
 
                 # Treinar modelo final com todos os dados
+                # Invalida cache para pegar champion params atualizados (HPO noturno)
+                self.registry.invalidate(symbol)
                 train_results = self.registry.train_all(symbol, X, y)
                 result["train"] = train_results
                 self._trained.add(symbol)
@@ -238,10 +241,18 @@ class PredictionEngine:
         session_score = session_info.get("session_score", None)
         result["session"] = session_info
 
+        # Temporal conviction: read parquet history BEFORE writing this cycle's preds.
+        convictions = compute_all_convictions(
+            symbol,
+            list(predictions.keys()),
+            settings.predictions_dir,
+        )
+
         signals = generate_signals_for_models(
             {name: pred[0].tolist() for name, pred in predictions.items()},
             current_price,
             session_score=session_score,
+            convictions=convictions,
         )
 
         # Salvar previsoes (schema enriquecido, apos signals/session)
@@ -495,6 +506,7 @@ class PredictionEngine:
                 cpcv_results = self._run_cpcv_validation(symbol, X, y)
 
                 # Treinar modelo final com todos os dados
+                self.registry.invalidate(symbol)
                 self.registry.train_all(symbol, X, y)
                 self._trained.add(symbol)
 

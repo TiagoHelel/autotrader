@@ -118,10 +118,68 @@ class TestGenerateSignal:
             "pred_t1", "pred_t2", "pred_t3",
             "current_price", "threshold",
             "session_score", "session_filtered",
+            "trajectory_ok", "temporal_conviction",
         }
         assert set(r.keys()) == expected_keys
         assert r["signal"] in {"BUY", "SELL", "HOLD"}
         assert 0.0 <= r["confidence"] <= 1.0
+
+    def test_monotonic_buy_trajectory_is_ok(self):
+        """pred_t1 > current, pred_t2 > pred_t1, pred_t3 > pred_t2 → trajectory_ok=True."""
+        r = generate_signal(
+            {"pred_t1": 1.1005, "pred_t2": 1.1010, "pred_t3": 1.1015},
+            current_price=1.1000,
+        )
+        assert r["trajectory_ok"] is True
+
+    def test_monotonic_sell_trajectory_is_ok(self):
+        r = generate_signal(
+            {"pred_t1": 1.0995, "pred_t2": 1.0990, "pred_t3": 1.0985},
+            current_price=1.1000,
+        )
+        assert r["trajectory_ok"] is True
+
+    def test_non_monotonic_trajectory_is_not_ok(self):
+        """pred_t2 dips below pred_t1 → trajectory_ok=False even if direction is positive."""
+        r = generate_signal(
+            {"pred_t1": 1.1010, "pred_t2": 1.1005, "pred_t3": 1.1020},
+            current_price=1.1000,
+        )
+        assert r["trajectory_ok"] is False
+
+    def test_trajectory_filter_forces_hold_when_not_monotonic(self):
+        """trajectory_filter=True + non-monotonic → HOLD, even if expected_return > threshold."""
+        r = generate_signal(
+            {"pred_t1": 1.1010, "pred_t2": 1.1005, "pred_t3": 1.1020},
+            current_price=1.1000,
+            trajectory_filter=True,
+        )
+        assert r["signal"] == "HOLD"
+        assert r["trajectory_ok"] is False
+
+    def test_trajectory_filter_does_not_block_monotonic_buy(self):
+        r = generate_signal(
+            {"pred_t1": 1.1005, "pred_t2": 1.1010, "pred_t3": 1.1015},
+            current_price=1.1000,
+            trajectory_filter=True,
+        )
+        assert r["signal"] == "BUY"
+        assert r["trajectory_ok"] is True
+
+    def test_temporal_conviction_stored_in_result(self):
+        r = generate_signal(
+            {"pred_t1": 1.1005, "pred_t2": 1.1010, "pred_t3": 1.1015},
+            current_price=1.1000,
+            temporal_conviction="high",
+        )
+        assert r["temporal_conviction"] == "high"
+
+    def test_temporal_conviction_defaults_to_none(self):
+        r = generate_signal(
+            {"pred_t1": 1.1005, "pred_t2": 1.1010, "pred_t3": 1.1015},
+            current_price=1.1000,
+        )
+        assert r["temporal_conviction"] is None
 
 
 # -------------------- generate_signals_for_models --------------------

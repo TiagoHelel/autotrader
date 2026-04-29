@@ -32,6 +32,8 @@ def generate_signal(
     threshold: float = None,
     confidence_min: float = None,
     session_score: float = None,
+    trajectory_filter: bool = False,
+    temporal_conviction: str | None = None,
 ) -> dict:
     """
     Gera sinal de trade baseado em previsoes multi-horizonte.
@@ -42,6 +44,8 @@ def generate_signal(
         threshold: retorno minimo para sinal (default: 0.0003)
         confidence_min: confianca minima para sinal (default: 0.4)
         session_score: score da sessao atual (0-1). Se < 0.3, forca HOLD.
+        trajectory_filter: se True, forca HOLD quando a trajetoria nao e monotonica
+        temporal_conviction: "high"/"low"/"unknown" vindo de compute_temporal_conviction()
 
     Returns:
         {
@@ -55,6 +59,8 @@ def generate_signal(
             "threshold": float,
             "session_score": float | None,
             "session_filtered": bool,
+            "trajectory_ok": bool,
+            "temporal_conviction": str | None,
         }
     """
     threshold = threshold or DEFAULT_THRESHOLD
@@ -94,8 +100,19 @@ def generate_signal(
     magnitude = min(abs(expected_return) / threshold, 1.0) if threshold > 0 else 0
     confidence = agreement * 0.6 + magnitude * 0.4
 
+    # Trajetoria monotonica: todos os horizontes apontando na mesma direcao,
+    # com magnitude crescente (t1 < t2 < t3 para BUY; inverso para SELL).
+    if expected_return > 0:
+        trajectory_ok = pred_t1 > current_price and pred_t2 > pred_t1 and pred_t3 > pred_t2
+    elif expected_return < 0:
+        trajectory_ok = pred_t1 < current_price and pred_t2 < pred_t1 and pred_t3 < pred_t2
+    else:
+        trajectory_ok = False
+
     # Determinar sinal
     if session_filtered:
+        signal = "HOLD"
+    elif trajectory_filter and not trajectory_ok:
         signal = "HOLD"
     elif expected_return > threshold and confidence >= confidence_min:
         signal = "BUY"
@@ -115,6 +132,8 @@ def generate_signal(
         "threshold": threshold,
         "session_score": session_score,
         "session_filtered": session_filtered,
+        "trajectory_ok": trajectory_ok,
+        "temporal_conviction": temporal_conviction,
     }
 
     return result
@@ -125,6 +144,8 @@ def generate_signals_for_models(
     current_price: float,
     threshold: float = None,
     session_score: float = None,
+    trajectory_filter: bool = False,
+    convictions: dict[str, str] | None = None,
 ) -> dict:
     """
     Gera sinais para todos os modelos de um simbolo.
@@ -133,6 +154,8 @@ def generate_signals_for_models(
         predictions_by_model: {model_name: [pred_t1, pred_t2, pred_t3]}
         current_price: preco atual
         session_score: score da sessao atual (0-1)
+        trajectory_filter: passa para generate_signal (forca HOLD se trajetoria nao monotonica)
+        convictions: {model_name: "high"/"low"/"unknown"} de compute_all_convictions()
 
     Returns:
         {model_name: signal_dict}
@@ -150,6 +173,8 @@ def generate_signals_for_models(
             pred_dict, current_price,
             threshold=threshold,
             session_score=session_score,
+            trajectory_filter=trajectory_filter,
+            temporal_conviction=(convictions or {}).get(model_name),
         )
         signals[model_name] = sig
 

@@ -94,7 +94,8 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(grep -vE \"\\\\.py$|__pycache__|^total|^\\\\.\")",
-      "Bash(curl -s http://localhost:8002/health)"
+      "Bash(curl -s http://localhost:8002/health)",
+      "PowerShell(python -c \"import graphify; print\\('graphify OK', graphify.__version__\\)\")"
     ]
   }
 }

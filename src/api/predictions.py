@@ -410,10 +410,14 @@ def get_models_performance_over_time(
 
 
 @router.get("/models/info")
-def get_models_info():
-    """Informacoes sobre modelos disponiveis."""
+def get_models_info(symbol: str = Query(default=None)):
+    """Informacoes sobre modelos disponiveis.
+
+    Se symbol for fornecido, retorna os params reais em uso (champion HPO se
+    disponivel, defaults caso contrario).
+    """
     from src.models.registry import create_all_models
-    models = create_all_models()
+    models = create_all_models(symbol=symbol)
     return {
         "models": [
             {
@@ -422,8 +426,21 @@ def get_models_info():
                 "features_used": m.features_used,
             }
             for m in models
-        ]
+        ],
+        "symbol": symbol,
+        "using_champion_params": symbol is not None,
     }
+
+
+@router.get("/hpo/champions")
+def get_hpo_champions():
+    """Lista todos os champions HPO promovidos (model x symbol_group)."""
+    try:
+        from src.training.hpo_store import load_all_champions
+        champions = load_all_champions()
+    except Exception:
+        champions = []
+    return {"champions": champions}
 
 
 @router.get("/models/validation")

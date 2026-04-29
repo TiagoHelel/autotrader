@@ -30,3 +30,10 @@ From daily_eval data, XAUUSD (gold) shows mean hit_t1=0.3631-0.3831 across days,
 ## Expected behavior
 
 hit_t1 >= 48% (vs ~37-38% baseline for XAUUSD), p-value < 0.05 Bonferroni-adjusted, PnL > 1 bps/trade after spread costs
+
+## Related
+
+- Learning: [[learnings/ed954f14251a-h10-xauusd-with-any-model-confidence-0-5-during-tokyo-session-shows-improved-hit]]
+- Experiment log: [[logs/ed954f14251a-h10-xauusd-with-any-model-confidence-0-5-during-tokyo-session-shows-improved-hit]]
+- Folder: [[AgentResearch/hypotheses/_index|hypotheses]]
+- Area: [[AgentResearch/README|AgentResearch]]

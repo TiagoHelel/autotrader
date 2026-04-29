@@ -47,7 +47,9 @@ export const api = {
     if (model) params.set('model', model)
     return fetchJson(`/api/predict/models/performance/over-time?${params}`)
   },
-  getModelsInfo: () => fetchJson('/api/predict/models/info'),
+  getModelsInfo: (symbol = null) =>
+    fetchJson(`/api/predict/models/info${symbol ? `?symbol=${symbol}` : ''}`),
+  getHpoChampions: () => fetchJson('/api/predict/hpo/champions'),
   getModelsValidation: (symbol = null) =>
     fetchJson(`/api/predict/models/validation${symbol ? `?symbol=${symbol}` : ''}`),
   getModelsFeatureImportance: (symbol = null, model = null) => {

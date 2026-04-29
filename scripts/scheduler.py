@@ -61,12 +61,15 @@ def _run(label: str, args: list[str]) -> None:
     started = datetime.now(timezone.utc)
     logger.info(f"[{label}] start at {started.isoformat()} UTC")
     try:
+        # HPO can take up to 2h (8 studies × ~15min each). Other jobs stay under 30min.
+        is_hpo = any("run_hpo" in str(a) for a in args)
+        timeout_seconds = 60 * 120 if is_hpo else 60 * 30
         result = subprocess.run(
             [PY, *args],
             cwd=ROOT,
             capture_output=True,
             text=True,
-            timeout=60 * 30,  # 30 min
+            timeout=timeout_seconds,
         )
         elapsed = (datetime.now(timezone.utc) - started).total_seconds()
         if result.returncode == 0:
@@ -96,6 +99,13 @@ def job_agent_researcher() -> None:
     )
 
 
+def job_hpo() -> None:
+    _run(
+        "hpo",
+        [str(ROOT / "scripts" / "run_hpo.py"), "--n-trials", "50"],
+    )
+
+
 JOBS = {
     "upload": (job_upload_s3, "01:00", "Upload S3 + archive local"),
     "eval": (job_daily_eval, "02:00", "Daily eval (pred vs real, vault update)"),
@@ -103,6 +113,11 @@ JOBS = {
         job_agent_researcher,
         "03:00",
         "Agent researcher (LLM hypotheses + holdout-safe validation)",
+    ),
+    "hpo": (
+        job_hpo,
+        "04:00",
+        "Nightly HPO: Optuna trials + champion/challenger promotion",
     ),
 }
 
