@@ -1,14 +1,14 @@
 ---
 type: agent-learning
-created: 2026-04-27T03:03:43.988105+00:00
+created: 2026-04-29T03:06:39.456237+00:00
 filter_hash: 2e7abcd50b0a
-verdict: REJECTED_N
+verdict: DUPLICATE_FILTER
 tags: [agent-research, learning]
 ---
 
 # Learning - EURJPY and GBPJPY pairs with random_forest model confidence >=0.7 during London session show improved hit_t1
 
-Research verdict REJECTED_N with n=0; holdout was not consumed because the research gate did not pass.
+Skipped because this filter hash was already tested.
 
 ## Filters
 

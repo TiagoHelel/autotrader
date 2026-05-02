@@ -1,14 +1,14 @@
 ---
 type: agent-learning
-created: 2026-04-28T03:13:26.432723+00:00
+created: 2026-05-02T03:08:55.016890+00:00
 filter_hash: 02c35ec34add
-verdict: REJECTED_N
+verdict: DUPLICATE_FILTER
 tags: [agent-research, learning]
 ---
 
 # Learning - EURUSD and GBPUSD pairs with random_forest model confidence >=0.7 during London session show improved hit_t1
 
-Research verdict REJECTED_N with n=0; holdout was not consumed because the research gate did not pass.
+Skipped because this filter hash was already tested.
 
 ## Filters
 

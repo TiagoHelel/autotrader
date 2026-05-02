@@ -1,0 +1,608 @@
+h1. Política de Engenharia de Dados — Padrões, Código e Boas Práticas de SQL
+
+{info:title=Documento de Política}
+Esta política estabelece as diretrizes obrigatórias de governança, modelagem de dados, desenvolvimento de código (Python/PySpark) e escrita de SQL aplicáveis a todas as equipes de engenharia de dados. O cumprimento destas diretrizes é mandatório para qualquer atividade de criação, refatoração ou revisão de artefatos de dados.
+{info}
+
+----
+
+h2. 1. Objetivo
+
+Estabelecer padrões obrigatórios de modelagem de dados, desenvolvimento de código (Python/PySpark) e escrita de SQL, garantindo consistência, governança, performance e manutenibilidade dos ativos de dados da organização.
+
+----
+
+h2. 2. Escopo de Aplicação
+
+Esta política aplica-se a todas as atividades de:
+
+* Criação de notebooks de análise, exploração ou ETL
+* Desenvolvimento ou refatoração de transformações em PySpark ou Python
+* Escrita ou revisão de queries SQL contra tabelas internas
+* Criação de queries em células {{%sql}} ou dentro de {{spark.sql()}}
+* Criação ou modificação de pipelines de dados (batch ou streaming)
+* Criação ou modificação de views
+* Modelagem de tabelas, views ou schemas
+* Definição de particionamento, clustering ou estratégias de armazenamento
+* Otimização de queries com problemas de performance
+* Code review em notebooks, scripts ou queries
+* Criação de exemplos ou templates de código/SQL para uso da equipe
+
+----
+
+h2. 3. Estrutura da Política
+
+|| # || Categoria || Seção || Descrição ||
+| 1 | Patterns de Dados | 4 | Padrões arquiteturais e de modelagem |
+| 2 | Boas Práticas de Código | 5 | Convenções de Python/PySpark |
+| 3 | Boas Práticas de SQL | 6 | Estilo, CTEs, performance, joins e anti-patterns |
+
+----
+
+h2. 4. Patterns de Dados
+
+{quote}
+*Princípio geral:* Consistência de nomenclatura, clareza semântica, tipagem coerente, documentação obrigatória e modelagem por camadas.
+{quote}
+
+{warning:title=Processo novo vs. processo existente — regra fundamental}
+Antes de aplicar as convenções de nomenclatura (§4.1, §4.2, §4.3), é obrigatório verificar se a tabela de destino já existe no catálogo. Esse é o critério para distinguir processos novos de existentes.
+{warning}
+
+|| Cenário || Como identificar || O que aplicar ||
+| *Processo novo* (tabela final NÃO existe) | A tabela de destino ainda não foi criada no catálogo | Aplicar TODAS as convenções: nomenclatura de tabelas, colunas, views, tipagem, documentação |
+| *Processo existente* (tabela final JÁ existe) | A tabela de destino já existe no catálogo | NÃO aplicar convenções de nomenclatura. Manter todos os nomes atuais. Aplicar apenas regras de código (§5), SQL (§6) e documentação (§4.5) |
+
+*Justificativa:* Renomear tabelas, colunas ou views de processos existentes pode quebrar queries, dashboards, jobs e demais consumidores. As convenções existem para orientar a *criação* de novos objetos, não para refatorar o que já está em produção.
+
+----
+
+h3. 4.1 Convenção Geral de Nomenclatura
+
+Todos os objetos *novos* do catálogo (tabelas, colunas, views, schemas) devem seguir convenção única e previsível. Idioma padrão: *inglês*. Para objetos existentes, manter o nome atual.
+
+*Regras obrigatórias:*
+* Utilizar {{snake_case}} para todos os nomes
+* Utilizar apenas letras minúsculas
+* Separar palavras com underscore {{_}}
+
+*Regras proibidas:*
+* Espaços em nomes
+* Acentos ou caracteres especiais
+* Abreviações ambíguas (ex: {{amt}}, {{dt}}, {{qty}} sem contexto)
+
+|| Correto || Incorreto || Motivo ||
+| customer_orders | CustomerOrders | Deve ser snake_case minúsculo |
+| shipment_events | shipment events | Espaços não são permitidos |
+| order_amount | vlr_ped | Abreviação ambígua |
+| delivery_date | data_entrega | Idioma padrão é inglês |
+
+----
+
+h3. 4.2 Pattern para Nomes de Tabelas
+
+Nomes de tabelas *novas* devem estar no plural e representar claramente o tipo de dado. Para tabelas existentes, manter o nome atual mesmo que não siga a convenção.
+
+*Regras obrigatórias:*
+* Nomes no plural (ex: {{orders}}, {{shipments}}, {{customers}})
+* Tabelas de histórico completo: sufixo {{_history}}
+* Tabelas incrementais por período: sufixo {{_daily}} ou {{_monthly}}
+
+*Regras proibidas:*
+* Sufixos de versionamento: {{_v2}}, {{_new}}, {{_final}}, {{_backup}}, {{_old}}
+* Redundância semântica: {{orders_data}}, {{orders_table}}, {{customers_info}}
+* Nomes genéricos: {{data}}, {{temp}}, {{staging}} (sem qualificador)
+
+|| Correto || Incorreto || Motivo ||
+| orders | order | Deve ser plural |
+| order_events | orders_data | Redundância semântica |
+| shipment_metrics_daily | shipment_metrics_v2 | Versionamento no nome é proibido |
+| customer_balance_history | customer_balance_old | Usar _history, não _old |
+
+----
+
+h3. 4.3 Pattern para Nomes de Colunas
+
+Colunas *novas* devem seguir sufixos e prefixos padronizados conforme o tipo semântico. Para colunas existentes, manter o nome atual.
+
+|| Tipo semântico || Pattern || Exemplo ||
+| Identificadores | <entity>_id | customer_id, order_id |
+| Booleanos | is_*, has_*, can_* | is_active, has_invoice, can_return |
+| Datas | *_date | created_date, delivery_date |
+| Timestamps | *_at | created_at, updated_at |
+| Contadores | *_count | item_count, retry_count |
+| Valores monetários | *_amount | total_amount, freight_amount |
+
+*Regras proibidas:*
+* Colunas sem descrição
+* Nomes genéricos: {{data}}, {{value}}, {{info}}, {{field}}, {{status}} (sem qualificador)
+* Booleanos sem prefixo {{is_}}/{{has_}}/{{can_}}
+
+|| Correto || Incorreto || Motivo ||
+| is_delivered | delivered | Booleano exige prefixo is_ |
+| created_at | creation_timestamp | Timestamps terminam com _at |
+| order_count | qtd_pedidos | Usar inglês e sufixo _count |
+| total_amount | total_value | Monetário termina com _amount |
+
+----
+
+h3. 4.4 Mapeamento Nomenclatura → Tipo de Dado
+
+O sufixo/prefixo da coluna determina o tipo de dado esperado. A coerência entre nome e tipo deve ser validada na criação ou revisão de tabelas.
+
+|| Pattern do nome || Tipo esperado ||
+| *_id | STRING |
+| *_sk | BIGINT |
+| *_date | DATE |
+| *_at | TIMESTAMP |
+| is_*, has_*, can_* | BOOLEAN |
+| *_count | INT ou BIGINT |
+| *_amount | DECIMAL(18,2) |
+| *_rate, *_percentage | DECIMAL |
+
+*Regras proibidas:*
+* {{STRING}} para colunas de data (usar {{DATE}} ou {{TIMESTAMP}})
+* {{FLOAT}} ou {{DOUBLE}} para valores monetários (usar {{DECIMAL(18,2)}})
+* {{INT}} para colunas {{*_id}} (usar {{STRING}})
+
+----
+
+h3. 4.5 Documentação Obrigatória
+
+Toda tabela e coluna deve ser documentada no Unity Catalog. A documentação é *obrigatória*, não opcional.
+
+*Regras para tabelas:*
+* {{COMMENT}} respondendo: o que é, de onde vem, qual o propósito
+* Tags obrigatórias:
+
+|| Tag || Descrição ||
+| domain | Domínio de negócio (logistics, finance, sales) |
+| owner | Equipe ou pessoa responsável |
+| source | Sistema ou origem do dado |
+| refresh_frequency | Frequência de atualização (hourly, daily, monthly) |
+
+*Regras para colunas:*
+* Toda coluna deve ter {{COMMENT}} descrevendo seu conteúdo
+
+*Exemplo de DDL documentada:*
+
+{code:sql}
+create table gold.shipment_metrics_daily (
+    shipment_id     string        comment 'Unique identifier of the shipment',
+    customer_id     string        comment 'Unique identifier of the customer',
+    shipped_date    date          comment 'Date when the shipment was dispatched',
+    delivered_at    timestamp     comment 'Timestamp of successful delivery',
+    is_on_time      boolean       comment 'Whether the delivery was within the SLA',
+    freight_amount  decimal(18,2) comment 'Total freight cost in BRL'
+)
+comment 'Daily shipment delivery metrics aggregated from silver.shipment_events.'
+tblproperties (
+    'domain'            = 'logistics',
+    'owner'             = 'data-engineering',
+    'source'            = 'pegaki',
+    'refresh_frequency' = 'daily'
+);
+{code}
+
+----
+
+h3. 4.6 Ambiente de Desenvolvimento — Sandbox
+
+Todo desenvolvimento, teste e experimentação deve ocorrer na camada *sandbox*. É proibido escrever diretamente em tabelas de produção (bronze, silver, gold) durante o ciclo de desenvolvimento.
+
+*Regras obrigatórias:*
+* Toda escrita durante desenvolvimento e testes deve usar a camada {{sandbox}}
+* Nomear tabelas de sandbox com prefixo do autor (ex: {{sandbox.diego_shipment_test}})
+* Tabelas na sandbox são *efêmeras* — podem ser removidas sem aviso prévio
+* Ao promover para produção, substituir a escrita para a camada definitiva
+* Remover a tabela de sandbox correspondente após a promoção
+
+*Regras proibidas:*
+* Escrita em bronze, silver ou gold durante desenvolvimento/testes
+* Tabelas de sandbox consumidas por dashboards ou pipelines produtivos
+* Tabelas de sandbox mantidas indefinidamente sem uso
+
+{code:python}
+# Durante desenvolvimento — escrita em sandbox
+result_df.write.mode("overwrite").saveAsTable("sandbox.diego_shipment_metrics_test")
+
+# Após validação — promover para produção
+result_df.write.mode("overwrite").saveAsTable("gold.shipment_metrics_daily")
+{code}
+
+----
+
+h3. 4.7 Anti-Patterns de Dados
+
+|| Anti-Pattern || Por que é ruim || Alternativa ||
+| Sufixos _v2, _new, _final | Versionamento no nome gera confusão e lixo no catálogo | Versionamento por schema ou sobrescrever a tabela |
+| Colunas sem descrição | Impossibilita self-service e discovery | Adicionar COMMENT em todas as colunas |
+| STRING para datas | Impede filtros de partição e funções temporais | Usar DATE ou TIMESTAMP |
+| FLOAT para valores monetários | Erros de arredondamento em cálculos financeiros | Usar DECIMAL(18,2) |
+| Nomes genéricos (data, value, info) | Ambiguidade semântica | Qualificar: delivery_date, order_amount |
+| Escrita em produção durante testes | Risco de corromper dados reais | Usar camada sandbox |
+| Renomear objeto existente por convenção | Quebra queries, dashboards e jobs dependentes | Manter nome atual |
+
+----
+
+h2. 5. Boas Práticas de Código
+
+{quote}
+*Princípio geral:* Código legível, reprodutível e otimizado para execução distribuída. Tanto {{spark.sql()}} quanto a DataFrame API são igualmente aceitos — a consistência dentro do notebook ou pipeline é obrigatória.
+{quote}
+
+----
+
+h3. 5.1 Estrutura de Notebooks
+
+Notebooks devem seguir estrutura previsível que facilite leitura, manutenção e execução sequencial.
+
+*Regras obrigatórias:*
+* Primeira célula em *markdown* com título, descrição do objetivo e autor/data
+* Dependências externas ({{%pip install}}) em célula dedicada precedida por markdown "Dependências"
+* Imports agrupados em célula dedicada na ordem: stdlib → terceiros → internos
+* Parâmetros e variáveis de controle em célula dedicada precedida por markdown "Parâmetros"
+* Cada bloco lógico subsequente separado por célula markdown descritiva
+* Títulos de células descritivos (não "Célula 3")
+
+*Regras proibidas:*
+* Notebooks sem célula de introdução markdown
+* Imports espalhados ao longo do notebook
+* Células com mais de 50 linhas sem separação lógica
+* Código comentado/morto mantido no notebook final
+* {{print()}} para debug deixado na versão produtiva
+
+----
+
+h3. 5.2 Convenções de Python
+
+Seguir PEP 8 como base, com adaptações para notebooks Databricks.
+
+*Regras obrigatórias:*
+* Variáveis e funções em {{snake_case}}
+* Classes em {{PascalCase}}
+* Constantes em {{UPPER_SNAKE_CASE}}
+* Funções devem ter docstring (propósito, parâmetros, retorno)
+* Type hints em funções utilitárias e módulos compartilhados
+* Limite de 120 caracteres por linha
+* Tratamento de exceções com {{try/except}} específico
+
+*Regras proibidas:*
+* Variáveis de uma letra fora de list comprehensions
+* {{import *}} em qualquer contexto
+* Funções com mais de 30 linhas sem decomposição
+* Hardcoded de caminhos, datas ou credenciais
+
+----
+
+h3. 5.3 Convenções de PySpark
+
+*Regras obrigatórias:*
+* Importar como {{from pyspark.sql import functions as F}}
+* Importar tipos como {{from pyspark.sql import types as T}}
+* Encadear transformações com uma operação por linha
+* Usar {{F.col("coluna")}} em vez de {{df.coluna}}
+* Alias explícito em toda coluna derivada
+* Usar {{spark.table("catalog.schema.table")}} para leitura
+* *Manter a mesma abordagem* ({{spark.sql}} ou DataFrame API) do início ao fim do notebook
+
+*Regras proibidas:*
+* UDFs Python quando existe função nativa equivalente (2-100x mais lentas)
+* {{collect()}} ou {{toPandas()}} em DataFrames grandes (acima de 1M linhas) sem filtro prévio
+* {{df.count()}} apenas para verificar se há dados — usar {{df.head(1)}} ou {{df.isEmpty()}}
+* Múltiplos {{withColumn}} em sequência para colunas independentes — usar {{select}}
+* {{cache()}} ou {{persist()}} sem {{.unpersist()}} correspondente
+* {{display()}} em notebooks de produção
+* Alternar arbitrariamente entre {{spark.sql()}} e DataFrame API
+
+{code:python}
+result_df = (
+    spark.table("silver.shipment_events")
+    .filter(F.col("event_date") >= F.lit("2026-01-01"))
+    .withColumn("is_delayed", F.col("delivered_at") > F.col("sla_deadline_at"))
+    .groupBy("customer_id")
+    .agg(
+        F.count("*").alias("shipment_count"),
+        F.sum(F.when(F.col("is_delayed"), 1).otherwise(0)).alias("delayed_count"),
+        F.round(F.avg("freight_amount"), 2).alias("avg_freight_amount"),
+    )
+    .orderBy(F.col("shipment_count").desc())
+)
+{code}
+
+*Anti-patterns de PySpark:*
+
+|| Anti-Pattern || Por que é ruim || Alternativa ||
+| UDF Python para lógica simples | Serialização Python ↔ JVM, 2-100x mais lento | F.when, F.regexp_replace, F.transform |
+| collect() sem filtro | Risco de OOM no driver | Filtrar/agregar antes ou usar limit() |
+| df.count() para check de vazio | Lê o dataset inteiro | df.head(1) ou df.isEmpty() |
+| withColumn em loop | Plano de execução gigante | Usar select com lista de colunas |
+| cache() sem unpersist() | Memória presa no cluster | Sempre liberar com unpersist() |
+| display() em produção | Saída não capturada, gera overhead | Apenas em exploração interativa |
+
+----
+
+h3. 5.4 Gerenciamento de Dependências
+
+*Regras obrigatórias:*
+* Usar {{%pip install}} no início do notebook, antes dos imports
+* Fixar versão dos pacotes críticos (ex: {{%pip install pandas==2.1.4}})
+* Após {{%pip install}}, reiniciar o interpretador com {{dbutils.library.restartPython()}}
+* Documentar em markdown o motivo de dependências externas
+
+*Regras proibidas:*
+* {{%pip install}} no meio do notebook
+* Instalar pacotes sem fixar versão em produção
+* Usar {{!pip}} em vez de {{%pip}}
+* Instalar pacotes já incluídos no DBR
+
+----
+
+h3. 5.5 Testes e Validação (Desenvolvimento)
+
+{note}
+*Escopo:* Esta seção aplica-se exclusivamente à fase de desenvolvimento e validação. Assertions, contagens intermediárias e verificações de schema *não devem ser mantidas em notebooks de produção*, pois geram overhead de processamento desnecessário.
+{note}
+
+*Regras obrigatórias:*
+* Verificar schema esperado após leitura e antes de escrita
+* Validar contagem de linhas em pontos críticos (após joins, filtros, agregações)
+* Verificar nulos em colunas obrigatórias com assertion antes de escrita
+* Usar {{assert}} ou {{raise ValueError}} para validações críticas
+* *Escrever em sandbox* durante testes — nunca em camadas produtivas
+* *Remover ou comentar* validações intermediárias ao promover para produção
+
+*Regras proibidas:*
+* Escrever em tabela final sem validação durante desenvolvimento
+* Usar {{print("ok")}} como único sinal de sucesso
+* Ignorar contagem de linhas após join (risco de fanout silencioso)
+* Manter {{assert}} e {{count()}} de validação em notebooks produtivos
+* Escrever em bronze, silver ou gold durante desenvolvimento
+
+----
+
+h2. 6. Boas Práticas de SQL
+
+{quote}
+*Princípio geral:* A sintaxe SQL deve ser escrita em *minúsculas* — keywords, funções, tipos de dados e nomes de objetos. Valores literais, strings de filtro e constantes de negócio podem manter o case original (ex: 'DELIVERED', 'SP'). Aplica-se tanto a queries em células {{%sql}} quanto a strings dentro de {{spark.sql()}}.
+{quote}
+
+----
+
+h3. 6.1 Estilo e Formatação
+
+*Regras obrigatórias:*
+* *Sintaxe SQL em minúsculas:* keywords ({{select}}, {{from}}, {{where}}, {{join}}), funções ({{count}}, {{coalesce}}, {{date_trunc}}), tipos ({{string}}, {{bigint}}, {{boolean}}) e nomes de objetos
+* *Valores literais mantêm o case original:* strings de filtro ({{'DELIVERED'}}, {{'CANCELLED'}}), constantes de negócio
+* Indentação de 4 espaços para cláusulas dentro de {{select}}, {{where}}, {{group by}}
+* Uma coluna por linha no {{select}} quando houver 3+ colunas
+* Alias de tabela obrigatório em queries com join (curtos e significativos)
+* Alias de coluna com {{as}} explícito
+* Vírgula no início da linha (leading comma)
+* Comentários com {{--}} para explicar lógica de negócio não óbvia
+
+*Regras proibidas:*
+* Keywords em maiúsculas ({{SELECT}}, {{FROM}}, {{WHERE}})
+* Funções em maiúsculas ({{COUNT}}, {{COALESCE}}, {{SUM}})
+* Queries inteiras em uma única linha (exceto consultas triviais)
+* Alias posicional em {{order by}} e {{group by}}
+* {{select *}} em queries de produção
+
+{code:sql}
+-- Correto: sintaxe SQL minúscula, valores literais no case original
+select
+    o.order_id
+    ,o.customer_id
+    ,o.created_at
+    ,o.status
+    ,count(*) as item_count
+    ,sum(oi.unit_amount) as total_amount
+from silver.orders as o
+inner join silver.order_items as oi
+    on o.order_id = oi.order_id
+where o.created_at >= '2026-01-01'
+    and o.status = 'DELIVERED'
+group by
+    o.order_id
+    ,o.customer_id
+    ,o.created_at
+    ,o.status
+order by o.created_at desc
+{code}
+
+----
+
+h3. 6.2 Common Table Expressions (CTEs)
+
+CTEs ({{with}}) são o mecanismo *preferido* para organizar queries complexas. Substituem subqueries aninhadas e tornam a lógica mais legível e testável.
+
+*Quando usar:*
+* Query tem 2+ etapas lógicas (filtrar → agregar → enriquecer)
+* Mesma subquery seria repetida em mais de um lugar
+* Para isolar e nomear cada etapa da transformação
+* Para facilitar debug
+
+*Quando NÃO usar:*
+* Query simples com uma única etapa
+* CTEs usadas apenas uma vez com lógica trivial
+
+*Regras obrigatórias:*
+* Nomes de CTEs descritivos e em {{snake_case}}
+* Uma CTE por etapa lógica
+* CTE final deve ser um {{select}} simples, sem lógica adicional
+
+{code:sql}
+with filtered_orders as (
+    select
+        order_id
+        ,customer_id
+        ,created_at
+        ,total_amount
+    from silver.orders
+    where created_at >= current_date() - interval 30 days
+        and is_cancelled = false
+)
+,daily_totals as (
+    select
+        date_trunc('day', created_at) as order_date
+        ,customer_id
+        ,count(*) as order_count
+        ,sum(total_amount) as total_amount
+    from filtered_orders
+    group by
+        date_trunc('day', created_at)
+        ,customer_id
+)
+select
+    order_date
+    ,customer_id
+    ,order_count
+    ,total_amount
+from daily_totals
+order by order_date desc
+{code}
+
+----
+
+h3. 6.3 Broadcast em Joins
+
+Broadcast força o envio de uma tabela inteira para todos os executors, evitando shuffle no join. Usar apenas com tabelas pequenas.
+
+*Quando usar:*
+* Tabela do lado menor tem até ~100MB (ou poucos milhares de linhas)
+* Joins com tabelas de dimensão (dim_customers, dim_cities, dim_status)
+* Lookups de configuração ou mapeamento
+
+*Quando NÃO usar:*
+* Ambas as tabelas são grandes (risco de OOM nos executors)
+* A tabela "pequena" pode crescer sem controle
+* Joins entre duas fact tables
+
+*Regras obrigatórias:*
+* Em SQL: usar {{/*+ broadcast(alias) */}}
+* Em DataFrame API: usar {{F.broadcast(df)}}
+* Sempre fazer broadcast do *lado menor* do join
+* Documentar em comentário por que o broadcast é seguro
+
+{code:sql}
+select /*+ broadcast(ds) */
+    se.shipment_id
+    ,se.status_id
+    ,ds.status_name
+from silver.shipment_events as se
+inner join silver.dim_status as ds  -- ~50 linhas
+    on se.status_id = ds.status_id
+{code}
+
+----
+
+h3. 6.4 Views
+
+Views encapsulam lógica reutilizável sem materializar dados. Usar para simplificar acesso e controlar governança.
+
+*Quando usar:*
+* Lógica reutilizada por múltiplos consumidores
+* Controle de acesso: expor subconjunto de colunas/linhas
+* Abstração de complexidade
+* Camada de compatibilidade quando a tabela base muda de schema
+
+*Quando NÃO usar:*
+* Lógica usada em apenas um lugar
+* Query muito pesada que seria melhor materializada como tabela
+* Performance crítica — views não são cacheadas
+
+*Regras obrigatórias:*
+* Toda view deve ter {{comment}} descritivo
+* Views de governança devem ter tag {{access_control = true}}
+* Views novas seguem os mesmos patterns de tabelas (snake_case, plural)
+* Prefixar com {{vw_}} quando necessário distinguir de tabelas no mesmo schema
+* Views existentes: manter o nome atual
+
+{code:sql}
+create or replace view gold.vw_active_customers as
+    select
+        customer_id
+        ,customer_name
+        ,created_at
+        ,total_order_count
+    from gold.customers
+    where is_active = true
+;
+{code}
+
+----
+
+h3. 6.5 Performance e Otimização
+
+*Regras obrigatórias:*
+* Sempre filtrar por colunas de partição quando disponível
+* Listar colunas explicitamente no {{select}}
+* Usar {{exists}} ou {{in}} com subquery em vez de {{left join}} + {{is null}} para anti-joins simples
+* Usar {{coalesce}} em vez de {{case when x is null then y else x end}}
+* Usar {{date_trunc}}, {{date_add}}, {{datediff}} em vez de manipulação manual de strings
+* Em {{union}}, preferir {{union all}} quando duplicatas são impossíveis
+
+*Regras proibidas:*
+* {{select *}} em queries de produção
+* {{order by}} sem {{limit}} em subqueries ou CTEs intermediárias
+* {{distinct}} para resolver duplicatas causadas por join incorreto
+* Cross join sem filtro
+* Funções não-determinísticas em cláusulas {{where}} de partição
+
+----
+
+h3. 6.6 JOINs e Agregações
+
+Joins são a principal fonte de problemas de performance e dados incorretos. Validar o resultado de todo join.
+
+*Regras obrigatórias:*
+* Tipo de join sempre explícito: {{inner join}}, {{left join}}, {{cross join}}
+* Condição de join sempre com {{on}} (nunca {{using}})
+* Tabela maior no {{from}}, tabela menor no {{join}}
+* Após todo join, validar contagem de linhas durante desenvolvimento
+* {{group by}} deve listar todas as colunas não-agregadas explicitamente
+
+*Regras proibidas:*
+* Join implícito com vírgula no {{from}}
+* {{group by}} posicional ({{group by 1, 2, 3}})
+* {{order by}} posicional
+* Join sem condição (cross join acidental)
+* {{having}} para filtros que poderiam estar no {{where}}
+
+----
+
+h3. 6.7 Tratamento de Datas e Timestamps
+
+*Regras obrigatórias:*
+* Truncar datas com {{date_trunc('month', coluna)}}
+* Aritmética de datas com {{date_add}}, {{date_sub}}, {{datediff}}, {{months_between}}
+* Intervalos com {{interval}} (ex: {{current_date() - interval 30 days}})
+* Conversão explícita com {{cast(coluna as date)}} ou {{to_date(coluna, 'yyyy-MM-dd')}}
+* Timestamps devem preservar timezone — usar {{to_utc_timestamp}} / {{from_utc_timestamp}}
+
+*Regras proibidas:*
+* {{substring(data, 1, 7)}} para extrair ano-mês
+* Concatenação de strings para montar datas
+* Comparar datas como strings
+* {{cast(coluna as string)}} para formatar datas — usar {{date_format}}
+
+----
+
+h3. 6.8 Anti-Patterns de SQL
+
+|| Anti-Pattern || Por que é ruim || Alternativa ||
+| Keywords em maiúsculas | Inconsistência com o padrão | Sintaxe SQL em minúsculas |
+| select * em produção | Lê colunas desnecessárias, quebra com schema evolution | Listar colunas explicitamente |
+| group by 1, 2 | Frágil — muda ao reordenar colunas | Usar nomes de coluna |
+| Join implícito com vírgula | Difícil de ler, fácil virar cross join | Usar inner join ... on |
+| distinct para corrigir duplicatas | Mascara join incorreto | Corrigir condição de join |
+| Subqueries aninhadas (3+ níveis) | Ilegível e difícil de debugar | Usar CTEs |
+| substring em datas | Impede funções temporais e partition pruning | date_trunc ou date_format |
+| order by sem limit em CTE | Sort desnecessário, gera shuffle | Remover ou adicionar limit |
+| Renomear objeto existente por convenção | Quebra queries, dashboards e jobs dependentes | Manter nome atual |
+
+----
+
+h2. 7. Conformidade
+
+O cumprimento desta política é *mandatório*. Code reviews devem validar a aderência às diretrizes aqui estabelecidas. Desvios devem ser justificados formalmente e documentados.

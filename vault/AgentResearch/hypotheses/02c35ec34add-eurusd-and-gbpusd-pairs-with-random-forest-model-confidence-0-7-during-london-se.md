@@ -1,6 +1,6 @@
 ---
 type: agent-hypothesis
-created: 2026-04-28T03:13:05.745056+00:00
+created: 2026-05-02T03:08:55.005966+00:00
 filter_hash: 02c35ec34add
 status: generated
 tags: [agent-research, hypothesis]
@@ -27,7 +27,7 @@ tags: [agent-research, hypothesis]
 
 ## Causal reasoning
 
-From daily_eval data, EURUSD shows mean hit_t1=0.4713 and GBPUSD=0.4767 (both above average ~0.45). London session has baseline 0.4298 but the combination of major pairs + London liquidity window is a known high-conviction setup. The random_forest model shows highest hit rates across days (0.6497, 0.6732) compared to other models. H7 tested EURUSD/GBPUSD with RF during London at confidence>=0.65 but didn't include GBPJPY and used a lower threshold. By adding GBPJPY (which has strong momentum characteristics in London) and raising the confidence threshold to 0.7, we target a regime where both temporal and instrument-specific factors align causally while filtering for stronger model consensus.
+From daily_eval data, EURUSD shows mean hit_t1=0.4713 and GBPUSD=0.4767 (both above average ~0.45). London session has baseline 0.4298 but the combination of major pairs + London liquidity window is a known high-conviction setup. The random_forest model shows highest hit rates across days (0.6497, 0.6732) compared to other models. H7 tested EURUSD/GBPUSD with RF during London at confidence>=0.65 but was REJECTED_N - by raising the confidence threshold to 0.7, we target a regime where both temporal and instrument-specific factors align causally while filtering for stronger model consensus.
 
 ## Expected behavior
 

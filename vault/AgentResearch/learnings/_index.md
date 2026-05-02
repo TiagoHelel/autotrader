@@ -8,9 +8,10 @@ tags: [agent-research, index]
 
 Auto-generated index. Lists every learning file in this folder.
 
-## Learning files (10)
+## Learning files (11)
 
 - [[learnings/02c35ec34add-eurusd-and-gbpusd-pairs-with-random-forest-model-confidence-0-7-during-london-se]]
+- [[learnings/2aee539f32fc-eurusd-and-gbpusd-pairs-with-random-forest-model-confidence-0-75-during-london-s]]
 - [[learnings/2e7abcd50b0a-eurjpy-and-gbpjpy-pairs-with-random-forest-model-confidence-0-7-during-london-se]]
 - [[learnings/332e319a0a01-nzdusd-and-audusd-pairs-with-random-forest-model-confidence-0-6-during-london-se]]
 - [[learnings/70b73c88d8f1-h9-usdjpy-and-usdcad-pairs-with-xgboost-model-confidence-0-6-during-new-york-ses]]

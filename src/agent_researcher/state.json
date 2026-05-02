@@ -1,7 +1,7 @@
 {
   "active_strategy_ids": [],
   "drift_history": {},
-  "last_run_at": "2026-04-28T03:13:26.485708+00:00",
+  "last_run_at": "2026-05-02T03:14:15.825277+00:00",
   "tested_filter_hashes": {
     "02c35ec34add": {
       "filters": {
@@ -17,6 +17,22 @@
         ]
       },
       "timestamp": "2026-04-28T03:13:26.424355+00:00",
+      "verdict": "REJECTED_N"
+    },
+    "2aee539f32fc": {
+      "filters": {
+        "confidence_min": 0.75,
+        "model": "random_forest",
+        "session": [
+          "london"
+        ],
+        "signal": 1,
+        "symbol": [
+          "EURUSD",
+          "GBPUSD"
+        ]
+      },
+      "timestamp": "2026-04-29T03:06:39.420363+00:00",
       "verdict": "REJECTED_N"
     },
     "2e7abcd50b0a": {

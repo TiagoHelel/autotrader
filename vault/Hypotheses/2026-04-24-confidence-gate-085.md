@@ -100,6 +100,14 @@ Sem outras restricoes. Quero testar se o gate sozinho carrega edge.
 
 ## Daily eval log (auto)
 
+- 2026-05-01: n=6110 | hit_t1=0.5352 | CI95=[0.5227, 0.5477] | verdict=PROMISING
+
+- 2026-04-30: n=6915 | hit_t1=0.6668 | CI95=[0.6556, 0.6778] | verdict=PROMISING
+
+- 2026-04-29: n=4670 | hit_t1=0.7096 | CI95=[0.6964, 0.7225] | verdict=PROMISING
+
+- 2026-04-28: n=3459 | hit_t1=0.7132 | CI95=[0.6979, 0.728] | verdict=PROMISING
+
 - 2026-04-27: n=4565 | hit_t1=0.5689 | CI95=[0.5545, 0.5832] | verdict=PROMISING
 
 - 2026-04-24: n=3946 | hit_t1=0.6358 | CI95=[0.6207, 0.6507] | verdict=PROMISING

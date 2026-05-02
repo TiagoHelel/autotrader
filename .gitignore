@@ -61,6 +61,8 @@ src/agent_researcher/tmp/
 *.safetensors
 models/
 data/
+!src/models/
+!src/data/
 *.csv
 *.parquet
 
