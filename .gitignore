@@ -68,6 +68,7 @@ data/
 
 # Logs
 logs/
+!command_center/frontend/src/components/logs/
 *.log
 
 # Coverage / Testing
